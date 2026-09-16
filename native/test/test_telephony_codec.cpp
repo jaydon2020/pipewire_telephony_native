@@ -74,6 +74,11 @@ int main() {
       R"({"version":1,"requestId":"wrong","operation":"dial","target":{"clientGeneration":1,"objectIncarnation":1,"path":"/x","interface":"x"},"arguments":{"text":"1","volume":null,"value":null}})",
       error));
   require(
+      pwt::decode_request(
+          R"({"version":1,"requestId":1,"operation":"dial","target":{"clientGeneration":1,"objectIncarnation":1,"path":"/x","interface":"x","future":true},"arguments":{"text":"1","volume":null,"value":null},"future":true})",
+          error)
+          .has_value());
+  require(
       !pwt::decode_request(std::string(pwt::kMaxMessageBytes + 1, 'x'), error));
 
   const pwt::GatewayProperties gateway{

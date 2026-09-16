@@ -21,6 +21,11 @@ constexpr std::array<std::string_view, 17> kOperations{
     "createMultiparty",
 };
 
+constexpr auto kReadOptions = glz::opts{
+    .error_on_unknown_keys = false,
+    .error_on_missing_keys = true,
+};
+
 bool valid_operation(std::string_view operation) {
   return std::ranges::find(kOperations, operation) != kOperations.end();
 }
@@ -44,8 +49,11 @@ std::optional<Request> decode_request(std::string_view json,
   }
 
   Request request;
-  if (const auto result = glz::read_json(request, json); result) {
-    error = glz::format_error(result, json);
+  // A mutable Glaze buffer is padded during parsing, which keeps malformed
+  // non-null-terminated FFI input inside its allocation.
+  std::string padded{json};
+  if (const auto result = glz::read<kReadOptions>(request, padded); result) {
+    error = glz::format_error(result, padded);
     return std::nullopt;
   }
   if (request.version != kProtocolVersion) {

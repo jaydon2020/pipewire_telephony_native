@@ -22,22 +22,120 @@ class PipewireTelephonyNativeBindings {
     ffi.Pointer<T> Function<T extends ffi.NativeType>(String symbolName) lookup,
   ) : _lookup = lookup;
 
-  int sum(int a, int b) {
-    return _sum(a, b);
+  int pwt_abi_version() {
+    return _pwt_abi_version();
   }
 
-  late final _sumPtr =
-      _lookup<ffi.NativeFunction<ffi.Int Function(ffi.Int, ffi.Int)>>('sum');
-  late final _sum = _sumPtr.asFunction<int Function(int, int)>();
+  late final _pwt_abi_versionPtr =
+      _lookup<ffi.NativeFunction<ffi.Uint32 Function()>>('pwt_abi_version');
+  late final _pwt_abi_version = _pwt_abi_versionPtr
+      .asFunction<int Function()>();
 
-  int sum_long_running(int a, int b) {
-    return _sum_long_running(a, b);
+  int pwt_initialize_dart_api_dl(ffi.Pointer<ffi.Void> data) {
+    return _pwt_initialize_dart_api_dl(data);
   }
 
-  late final _sum_long_runningPtr =
-      _lookup<ffi.NativeFunction<ffi.Int Function(ffi.Int, ffi.Int)>>(
-        'sum_long_running',
+  late final _pwt_initialize_dart_api_dlPtr =
+      _lookup<ffi.NativeFunction<pwt_status Function(ffi.Pointer<ffi.Void>)>>(
+        'pwt_initialize_dart_api_dl',
       );
-  late final _sum_long_running = _sum_long_runningPtr
-      .asFunction<int Function(int, int)>();
+  late final _pwt_initialize_dart_api_dl = _pwt_initialize_dart_api_dlPtr
+      .asFunction<int Function(ffi.Pointer<ffi.Void>)>();
+
+  ffi.Pointer<ffi.Void> pwt_client_create(int event_port) {
+    return _pwt_client_create(event_port);
+  }
+
+  late final _pwt_client_createPtr =
+      _lookup<ffi.NativeFunction<ffi.Pointer<ffi.Void> Function(ffi.Int64)>>(
+        'pwt_client_create',
+      );
+  late final _pwt_client_create = _pwt_client_createPtr
+      .asFunction<ffi.Pointer<ffi.Void> Function(int)>();
+
+  int pwt_client_start(ffi.Pointer<ffi.Void> handle) {
+    return _pwt_client_start(handle);
+  }
+
+  late final _pwt_client_startPtr =
+      _lookup<ffi.NativeFunction<pwt_status Function(ffi.Pointer<ffi.Void>)>>(
+        'pwt_client_start',
+      );
+  late final _pwt_client_start = _pwt_client_startPtr
+      .asFunction<int Function(ffi.Pointer<ffi.Void>)>();
+
+  int pwt_client_submit(
+    ffi.Pointer<ffi.Void> handle,
+    ffi.Pointer<ffi.Uint8> bytes,
+    int length,
+    int result_port,
+  ) {
+    return _pwt_client_submit(handle, bytes, length, result_port);
+  }
+
+  late final _pwt_client_submitPtr =
+      _lookup<
+        ffi.NativeFunction<
+          pwt_status Function(
+            ffi.Pointer<ffi.Void>,
+            ffi.Pointer<ffi.Uint8>,
+            ffi.Uint64,
+            ffi.Int64,
+          )
+        >
+      >('pwt_client_submit');
+  late final _pwt_client_submit = _pwt_client_submitPtr
+      .asFunction<
+        int Function(ffi.Pointer<ffi.Void>, ffi.Pointer<ffi.Uint8>, int, int)
+      >();
+
+  int pwt_client_stop(ffi.Pointer<ffi.Void> handle) {
+    return _pwt_client_stop(handle);
+  }
+
+  late final _pwt_client_stopPtr =
+      _lookup<ffi.NativeFunction<pwt_status Function(ffi.Pointer<ffi.Void>)>>(
+        'pwt_client_stop',
+      );
+  late final _pwt_client_stop = _pwt_client_stopPtr
+      .asFunction<int Function(ffi.Pointer<ffi.Void>)>();
+
+  void pwt_client_destroy(ffi.Pointer<ffi.Void> handle) {
+    return _pwt_client_destroy(handle);
+  }
+
+  late final _pwt_client_destroyPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
+        'pwt_client_destroy',
+      );
+  late final _pwt_client_destroy = _pwt_client_destroyPtr
+      .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
+
+  void pwt_free(ffi.Pointer<ffi.Void> buffer) {
+    return _pwt_free(buffer);
+  }
+
+  late final _pwt_freePtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
+        'pwt_free',
+      );
+  late final _pwt_free = _pwt_freePtr
+      .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
 }
+
+typedef pwt_status = ffi.Int32;
+typedef Dartpwt_status = int;
+
+const int PWT_STATUS_OK = 0;
+
+const int PWT_STATUS_INVALID_ARGUMENT = 1;
+
+const int PWT_STATUS_INVALID_HANDLE = 2;
+
+const int PWT_STATUS_INVALID_STATE = 3;
+
+const int PWT_STATUS_QUEUE_FULL = 4;
+
+const int PWT_STATUS_PROTOCOL_ERROR = 5;
+
+const int PWT_STATUS_INTERNAL_ERROR = 6;

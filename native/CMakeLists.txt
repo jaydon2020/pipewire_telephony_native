@@ -19,14 +19,14 @@ add_library(pwt_glaze INTERFACE)
 target_include_directories(pwt_glaze INTERFACE third_party/glaze/include)
 target_compile_features(pwt_glaze INTERFACE cxx_std_23)
 
-set(PIPEWIRE_TELEPHONY_SOURCES
-  src/dart_api_dl.c
-  src/pipewire_telephony_native.c
+set(PIPEWIRE_TELEPHONY_CORE_SOURCES
+  src/client_context.cpp
+  src/command_queue.cpp
   src/telephony_codec.cpp
 )
 
 add_library(pipewire_telephony_native_core STATIC
-  ${PIPEWIRE_TELEPHONY_SOURCES}
+  ${PIPEWIRE_TELEPHONY_CORE_SOURCES}
 )
 
 target_include_directories(pipewire_telephony_native_core
@@ -46,7 +46,8 @@ set_target_properties(pipewire_telephony_native_core PROPERTIES
 )
 
 add_library(pipewire_telephony_native SHARED
-  ${PIPEWIRE_TELEPHONY_SOURCES}
+  src/dart_api_dl.c
+  src/telephony_bridge.cpp
 )
 
 target_include_directories(pipewire_telephony_native
@@ -58,15 +59,23 @@ target_compile_definitions(pipewire_telephony_native
 )
 
 target_link_libraries(pipewire_telephony_native
-  PRIVATE sdbus-c++ pwt_glaze pthread
+  PRIVATE pipewire_telephony_native_core
 )
 
 set_target_properties(pipewire_telephony_native PROPERTIES
   CXX_VISIBILITY_PRESET hidden
+  VISIBILITY_INLINES_HIDDEN YES
   LINKER_LANGUAGE CXX
   PUBLIC_HEADER include/pipewire_telephony_native.h
   OUTPUT_NAME "pipewire_telephony_native"
 )
+
+if(UNIX AND NOT APPLE)
+  target_link_options(pipewire_telephony_native PRIVATE
+    "-Wl,--exclude-libs,ALL"
+    "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/exports.map"
+  )
+endif()
 
 if(BUILD_TESTING)
   enable_testing()
