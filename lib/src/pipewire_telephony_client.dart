@@ -190,6 +190,7 @@ final class PipeWireTelephonyClient {
 
   Future<void> _close() async {
     if (_state == PipeWireTelephonyClientState.closed) return;
+    await Future<void>.value();
     _setState(PipeWireTelephonyClientState.closing);
     _startupTimer?.cancel();
     final completer = _connectCompleter;

@@ -356,6 +356,7 @@ void MockTelephonyService::register_gateway(
         invoke("Activate");
       }),
                   sdbus::registerProperty("State").withGetter([this] {
+                    read_property("GetTransportProperties");
                     const std::lock_guard lock(mutex_);
                     return transport_state_.state;
                   }),

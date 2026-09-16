@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ffi';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:pipewire_telephony_native/pipewire_telephony_native.dart';
+import 'package:pipewire_telephony_native/src/ffi/bindings.dart';
 import 'package:test/test.dart';
 
 Future<Process> startMockService() async {
@@ -593,6 +596,80 @@ void main() {
         await stopMockService(service);
       });
 
+      test(
+        'close settles mixed in-flight operations and late replies',
+        () async {
+          final service = await startMockService();
+          final client = PipeWireTelephonyClient(bus: PipeWireBus.session);
+          await client.connect();
+          final gateway = client.gateways.single;
+          final call = client.calls.single;
+          final transport = gateway.transport!;
+          service.stdin.writeln('delay-operations');
+          await service.stdin.flush();
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+
+          final operations = [
+            gateway.refresh(),
+            call.refresh(),
+            transport.refresh(),
+            gateway.dial('+123'),
+          ];
+          final settled = Future.wait(
+            operations.map(
+              (operation) => operation
+                  .then<Object?>((_) => null)
+                  .catchError((Object error) => error),
+            ),
+          );
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+          await client.close().timeout(const Duration(seconds: 2));
+          final results = await settled.timeout(const Duration(seconds: 2));
+          expect(results.whereType<PipeWireTelephonyException>(), isNotEmpty);
+
+          await stopMockService(service);
+        },
+      );
+
+      test('paused listeners do not delay close', () async {
+        final service = await startMockService();
+        final client = PipeWireTelephonyClient(bus: PipeWireBus.session);
+        await client.connect();
+        final stateSubscription = client.stateChanged.listen((_) {})..pause();
+        final gatewaySubscription = client.gatewayRemoved.listen((_) {})
+          ..pause();
+        final propertySubscription =
+            client.gateways.single.propertiesChanged.listen((_) {})..pause();
+
+        await client.close().timeout(const Duration(seconds: 2));
+        expect(client.state, PipeWireTelephonyClientState.closed);
+        await stateSubscription.cancel();
+        await gatewaySubscription.cancel();
+        await propertySubscription.cancel();
+        await stopMockService(service);
+      });
+
+      test('a closed native event port stops its client', () async {
+        final service = await startMockService();
+        final path = Platform.environment['PWT_NATIVE_LIB']!;
+        final bindings = PwtNativeBindings(
+          DynamicLibrary.open(path),
+          libraryPath: path,
+        );
+        expect(bindings.initializeDartApi(), PwtNativeStatus.ok);
+        final port = ReceivePort();
+        final handle = bindings.createClient(
+          port.sendPort.nativePort,
+          bus: PwtNativeBus.session,
+        );
+        port.close();
+
+        expect(bindings.start(handle), PwtNativeStatus.ok);
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        await bindings.destroyAsync(handle).timeout(const Duration(seconds: 2));
+        await stopMockService(service);
+      });
+
       test('missing service has a bounded unavailable result', () async {
         final client = PipeWireTelephonyClient(
           bus: PipeWireBus.session,
@@ -643,6 +720,49 @@ void main() {
         await expectLater(client.connect(), throwsStateError);
         await client.close();
       });
+
+      test('owner replacement permits a fresh client', () async {
+        final service = await startMockService();
+        final original = PipeWireTelephonyClient(bus: PipeWireBus.session);
+        await original.connect();
+        final unavailable = original.stateChanged.firstWhere(
+          (state) => state == PipeWireTelephonyClientState.unavailable,
+        );
+
+        service.stdin.writeln('restart');
+        await service.stdin.flush();
+        await unavailable.timeout(const Duration(seconds: 2));
+        await original.close();
+
+        final replacement = PipeWireTelephonyClient(bus: PipeWireBus.session);
+        await replacement.connect().timeout(const Duration(seconds: 2));
+        expect(replacement.gateways, hasLength(1));
+        expect(replacement.calls, hasLength(1));
+        expect(replacement.gateways.single.transport, isNotNull);
+        await replacement.close();
+        await stopMockService(service);
+      });
+
+      test(
+        'bus failure terminates the client without stranding close',
+        () async {
+          final service = await startMockService();
+          final client = PipeWireTelephonyClient(bus: PipeWireBus.session);
+          await client.connect();
+          final unavailable = client.stateChanged.firstWhere(
+            (state) => state == PipeWireTelephonyClientState.unavailable,
+          );
+          final busPid = int.parse(Platform.environment['PWT_TEST_BUS_PID']!);
+
+          Process.killPid(busPid, ProcessSignal.sigterm);
+          await unavailable.timeout(const Duration(seconds: 2));
+          expect(client.gateways, isEmpty);
+          expect(client.calls, isEmpty);
+          await client.close().timeout(const Duration(seconds: 2));
+          service.kill(ProcessSignal.sigkill);
+          await service.exitCode;
+        },
+      );
     },
     skip: integrationAvailable ? false : 'native integration is not configured',
   );

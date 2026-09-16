@@ -40,6 +40,8 @@ int main() {
     }
     if (command == "add") {
       service.add_gateway();
+    } else if (command == "restart") {
+      service.restart();
     } else if (command == "remove") {
       service.remove_gateway();
     } else if (command == "add-second") {
