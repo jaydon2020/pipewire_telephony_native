@@ -425,6 +425,59 @@ void main() {
         await stopMockService(service);
       });
 
+      test(
+        'volume writes are range checked and confirmed with GetAll',
+        () async {
+          final service = await startMockService();
+          final client = PipeWireTelephonyClient(bus: PipeWireBus.session);
+          await client.connect();
+          final gateway = client.gateways.single;
+
+          final speakerChanged = gateway.propertiesChanged.firstWhere(
+            (names) => names.contains('SpeakerVolume'),
+          );
+          await gateway.setSpeakerVolume(0);
+          await speakerChanged;
+          expect(gateway.speakerVolume, 0);
+
+          final microphoneChanged = gateway.propertiesChanged.firstWhere(
+            (names) => names.contains('MicrophoneVolume'),
+          );
+          await gateway.setMicrophoneVolume(15);
+          await microphoneChanged;
+          expect(gateway.microphoneVolume, 15);
+
+          for (final volume in [-1, 16]) {
+            expect(() => gateway.setSpeakerVolume(volume), throwsRangeError);
+            expect(() => gateway.setMicrophoneVolume(volume), throwsRangeError);
+          }
+
+          service.stdin.writeln('fail-speaker-volume');
+          await service.stdin.flush();
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+          await expectLater(
+            gateway.setSpeakerVolume(1),
+            throwsA(
+              isA<PipeWireTelephonyException>()
+                  .having(
+                    (error) => error.name,
+                    'name',
+                    'org.pipewire.Telephony.Error.NotSupported',
+                  )
+                  .having(
+                    (error) => error.message,
+                    'message',
+                    'speaker volume is unavailable',
+                  ),
+            ),
+          );
+          expect(gateway.speakerVolume, 0);
+
+          await client.close();
+          await stopMockService(service);
+        },
+      );
+
       test('missing service has a bounded unavailable result', () async {
         final client = PipeWireTelephonyClient(
           bus: PipeWireBus.session,

@@ -98,6 +98,10 @@ int main() {
     } else if (command == "fail-answer") {
       service.fail_next("Answer", "org.pipewire.Telephony.Error.InvalidState",
                         "call cannot be answered");
+    } else if (command == "fail-speaker-volume") {
+      service.fail_next("SetSpeakerVolume",
+                        "org.pipewire.Telephony.Error.NotSupported",
+                        "speaker volume is unavailable");
     } else if (command == "quit") {
       break;
     }

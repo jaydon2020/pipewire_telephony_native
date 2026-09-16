@@ -74,6 +74,36 @@ final class PipeWireAudioGateway {
     );
   }
 
+  Future<void> setSpeakerVolume(int volume) => _setVolume(
+    operation: 'setSpeakerVolume',
+    argumentName: 'volume',
+    volume: volume,
+  );
+
+  Future<void> setMicrophoneVolume(int volume) => _setVolume(
+    operation: 'setMicrophoneVolume',
+    argumentName: 'volume',
+    volume: volume,
+  );
+
+  Future<void> _setVolume({
+    required String operation,
+    required String argumentName,
+    required int volume,
+  }) {
+    ensureValid();
+    if (volume < 0 || volume > 15) {
+      throw RangeError.range(volume, 0, 15, argumentName);
+    }
+    return _client._command(
+      operation: operation,
+      path: objectPath,
+      incarnation: incarnation,
+      interface: 'org.pipewire.Telephony.AudioGateway1',
+      arguments: PwtRequestArguments(volume: volume),
+    );
+  }
+
   void updateProperties(PwtGatewayProperties properties) {
     if (_valid && properties.incarnation == incarnation) {
       _properties = properties;

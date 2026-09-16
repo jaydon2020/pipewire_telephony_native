@@ -394,7 +394,28 @@ void ClientContext::dispatch_request(const Request &request,
                              ? std::string{"SpeakerVolume"}
                              : std::string{"MicrophoneVolume"},
                          sdbus::Variant{*request.arguments.volume})
-          .uponReplyInvoke(complete);
+          .uponReplyInvoke([this, complete, id = request.requestId,
+                            path = request.target.path](
+                               std::optional<sdbus::Error> error) {
+            if (error) {
+              complete(std::move(error));
+              return;
+            }
+            const auto proxy = operation_proxies_.find(path);
+            if (pending_.find(id) == pending_.end() ||
+                proxy == operation_proxies_.end()) {
+              return;
+            }
+            proxy->second->callMethodAsync("GetAll")
+                .onInterface(kPropertiesInterface)
+                .withArguments(std::string{kGatewayInterface})
+                .uponReplyInvoke([this, id](
+                                     std::optional<sdbus::Error> refresh_error,
+                                     const std::map<std::string, sdbus::Variant>
+                                         &properties) {
+                  complete_refresh(id, properties, std::move(refresh_error));
+                });
+          });
     } else if (request.target.interface == kTransportInterface) {
       throw std::invalid_argument("transport is not available");
     } else {
@@ -443,7 +464,8 @@ void ClientContext::complete_refresh(
   const auto path = found->second.path;
   const auto incarnation = found->second.incarnation;
   bool applied = false;
-  if (request == "refreshGateway") {
+  if (request == "refreshGateway" || request == "setSpeakerVolume" ||
+      request == "setMicrophoneVolume") {
     applied = gateways_->apply_gateway_refresh(path, incarnation, properties);
   } else if (request == "refreshCall") {
     applied = gateways_->apply_call_refresh(path, incarnation, properties);

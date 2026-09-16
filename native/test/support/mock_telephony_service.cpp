@@ -316,6 +316,7 @@ void MockTelephonyService::register_gateway(
                 return state.speakerVolume;
               })
               .withSetter([this, &state](const uint8_t &value) {
+                invoke("SetSpeakerVolume", std::to_string(value));
                 const std::lock_guard lock(mutex_);
                 state.speakerVolume = value;
               }),
@@ -325,6 +326,7 @@ void MockTelephonyService::register_gateway(
                 return state.microphoneVolume;
               })
               .withSetter([this, &state](const uint8_t &value) {
+                invoke("SetMicrophoneVolume", std::to_string(value));
                 const std::lock_guard lock(mutex_);
                 state.microphoneVolume = value;
               }))

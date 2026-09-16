@@ -95,6 +95,14 @@ int main() {
   require(!pwt::decode_request(
       R"({"version":1,"requestId":1,"operation":"sendTones","target":{"clientGeneration":1,"objectIncarnation":1,"path":"/x","interface":"x"},"arguments":{"text":"+","volume":null,"value":null}})",
       error));
+  require(!pwt::decode_request(
+      R"({"version":1,"requestId":1,"operation":"setSpeakerVolume","target":{"clientGeneration":1,"objectIncarnation":1,"path":"/x","interface":"x"},"arguments":{"text":null,"volume":16,"value":null}})",
+      error));
+  require(
+      pwt::decode_request(
+          R"({"version":1,"requestId":1,"operation":"setMicrophoneVolume","target":{"clientGeneration":1,"objectIncarnation":1,"path":"/x","interface":"x"},"arguments":{"text":null,"volume":15,"value":null}})",
+          error)
+          .has_value());
   const auto long_dial = std::string(81, '1');
   require(!pwt::decode_request(
       std::string{

@@ -81,6 +81,10 @@ std::optional<Request> decode_request(std::string_view json,
              (!request.arguments.text ||
               !valid_text(*request.arguments.text, "0123456789*#ABCD"))) {
     error = "invalid DTMF string";
+  } else if ((request.operation == "setSpeakerVolume" ||
+              request.operation == "setMicrophoneVolume") &&
+             (!request.arguments.volume || *request.arguments.volume > 15)) {
+    error = "volume must be between 0 and 15";
   } else {
     return request;
   }
