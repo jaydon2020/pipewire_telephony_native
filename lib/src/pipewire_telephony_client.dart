@@ -10,6 +10,8 @@ import 'ffi/codec.dart';
 import 'ffi/types.dart';
 import 'internal/library_loader.dart';
 
+part 'pipewire_audio_gateway.dart';
+
 final class PipeWireTelephonyClient {
   PipeWireTelephonyClient({
     this.bus = PipeWireBus.system,
@@ -23,7 +25,17 @@ final class PipeWireTelephonyClient {
   final Duration startupTimeout;
   final _stateChanges =
       StreamController<PipeWireTelephonyClientState>.broadcast(sync: true);
+  final _gatewayAdded = StreamController<PipeWireAudioGateway>.broadcast(
+    sync: true,
+  );
+  final _gatewayRemoved = StreamController<PipeWireAudioGateway>.broadcast(
+    sync: true,
+  );
+  final _gatewayChanged = StreamController<PipeWireAudioGateway>.broadcast(
+    sync: true,
+  );
   final _codec = const PwtJsonCodec();
+  final _gateways = <String, PipeWireAudioGateway>{};
 
   late final PwtNativeBindings _bindings;
   PipeWireTelephonyClientState _state = PipeWireTelephonyClientState.idle;
@@ -39,6 +51,11 @@ final class PipeWireTelephonyClient {
   PipeWireTelephonyClientState get state => _state;
   PipeWireTelephonyException? get lastError => _lastError;
   Stream<PipeWireTelephonyClientState> get stateChanged => _stateChanges.stream;
+  List<PipeWireAudioGateway> get gateways =>
+      List.unmodifiable(_gateways.values);
+  Stream<PipeWireAudioGateway> get gatewayAdded => _gatewayAdded.stream;
+  Stream<PipeWireAudioGateway> get gatewayRemoved => _gatewayRemoved.stream;
+  Stream<PipeWireAudioGateway> get gatewayChanged => _gatewayChanged.stream;
 
   Future<void> connect() {
     if (_state == PipeWireTelephonyClientState.ready) {
@@ -95,8 +112,12 @@ final class PipeWireTelephonyClient {
     _eventPort?.close();
     _eventSubscription = null;
     _eventPort = null;
+    _clearGateways(notify: false);
     _setState(PipeWireTelephonyClientState.closed);
     unawaited(_stateChanges.close());
+    unawaited(_gatewayAdded.close());
+    unawaited(_gatewayRemoved.close());
+    unawaited(_gatewayChanged.close());
   }
 
   void _onNativeEvent(Object? message) {
@@ -112,6 +133,11 @@ final class PipeWireTelephonyClient {
       final event = _codec.decodeEvent(message);
       final lifecycle = event.payload.lifecycle?.state;
       if (lifecycle == 'ready') {
+        final startup = event.payload.startup;
+        if (startup == null) {
+          throw const FormatException('ready event has no startup snapshot');
+        }
+        _replaceGateways(event.clientGeneration, startup.gateways);
         _startupTimer?.cancel();
         _setState(PipeWireTelephonyClientState.ready);
         final completer = _connectCompleter;
@@ -123,6 +149,8 @@ final class PipeWireTelephonyClient {
               ? _localException('telephony service unavailable')
               : _exception(error),
         );
+      } else {
+        _applyGatewayEvent(event);
       }
     } catch (error, stackTrace) {
       _failStartup(_localException(error.toString()), stackTrace);
@@ -147,6 +175,7 @@ final class PipeWireTelephonyClient {
     if (completer != null && !completer.isCompleted) {
       completer.completeError(error, stackTrace);
     }
+    _clearGateways();
     _setState(PipeWireTelephonyClientState.unavailable);
     unawaited(_releaseNative());
   }
@@ -174,6 +203,59 @@ final class PipeWireTelephonyClient {
     if (_state == value) return;
     _state = value;
     if (!_stateChanges.isClosed) _stateChanges.add(value);
+  }
+
+  void _replaceGateways(
+    int clientGeneration,
+    List<PwtGatewayProperties> properties,
+  ) {
+    _clearGateways(notify: false);
+    for (final value in properties) {
+      _gateways[value.path] = PipeWireAudioGateway.internal(
+        clientGeneration,
+        value,
+      );
+    }
+  }
+
+  void _applyGatewayEvent(PwtEvent event) {
+    final properties = event.payload.gateway;
+    if (properties == null) return;
+    switch (event.kind) {
+      case 'gatewayAdded':
+        final previous = _gateways.remove(properties.path);
+        previous?.invalidate();
+        final gateway = PipeWireAudioGateway.internal(
+          event.clientGeneration,
+          properties,
+        );
+        _gateways[properties.path] = gateway;
+        if (!_gatewayAdded.isClosed) _gatewayAdded.add(gateway);
+      case 'gatewayChanged':
+        final gateway = _gateways[properties.path];
+        if (gateway == null || gateway.incarnation != properties.incarnation) {
+          return;
+        }
+        gateway.updateProperties(properties);
+        if (!_gatewayChanged.isClosed) _gatewayChanged.add(gateway);
+      case 'gatewayRemoved':
+        final gateway = _gateways[properties.path];
+        if (gateway == null || gateway.incarnation != properties.incarnation) {
+          return;
+        }
+        _gateways.remove(properties.path);
+        gateway.invalidate();
+        if (!_gatewayRemoved.isClosed) _gatewayRemoved.add(gateway);
+    }
+  }
+
+  void _clearGateways({bool notify = true}) {
+    final removed = _gateways.values.toList(growable: false);
+    _gateways.clear();
+    for (final gateway in removed) {
+      gateway.invalidate();
+      if (notify && !_gatewayRemoved.isClosed) _gatewayRemoved.add(gateway);
+    }
   }
 }
 

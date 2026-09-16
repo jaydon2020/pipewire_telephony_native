@@ -8,6 +8,7 @@
 
 #include <dart_api_dl.h>
 
+#include "gateway_registry.h"
 #include "telephony_codec.h"
 
 namespace pwt {
@@ -128,6 +129,9 @@ void ClientContext::run() {
           if (current == service_owner_) {
             return;
           }
+          if (gateways_) {
+            gateways_->invalidate_all();
+          }
           post_unavailable("org.pipewire.Telephony.Error.ServiceChanged",
                            current.empty() ? "telephony service disappeared"
                                            : "telephony service owner changed");
@@ -143,12 +147,18 @@ void ClientContext::run() {
       throw std::runtime_error(
           "telephony service owner changed during startup");
     }
+    gateways_ = std::make_unique<GatewayRegistry>(
+        *connection_,
+        [this](const std::string &kind, const GatewayProperties &gateway) {
+          post_gateway(kind, gateway);
+        });
+    auto gateways = gateways_->synchronize();
     if (commands_.stopping()) {
       finish_startup({.ready = false,
                       .errorName = "org.pipewire.Telephony.Error.Cancelled",
                       .errorMessage = "telephony startup was cancelled"});
     } else {
-      post_ready();
+      post_ready(std::move(gateways));
       finish_startup({.ready = true});
       run_event_loop();
     }
@@ -165,6 +175,7 @@ void ClientContext::run() {
   }
 
   owner_subscription_.reset();
+  gateways_.reset();
   connection_.reset();
   {
     const std::lock_guard lock(state_mutex_);
@@ -211,6 +222,11 @@ void ClientContext::dispatch_commands() {
     if (!request) {
       continue;
     }
+    const bool current_gateway =
+        gateways_ &&
+        request->target.interface == "org.pipewire.Telephony.AudioGateway1" &&
+        gateways_->contains(request->target.path,
+                            request->target.objectIncarnation);
     Reply reply{
         .version = kProtocolVersion,
         .clientGeneration = generation_,
@@ -218,8 +234,12 @@ void ClientContext::dispatch_commands() {
         .kind = "reply",
         .requestId = request->requestId,
         .ok = false,
-        .error = local_error("org.pipewire.Telephony.Error.NotImplemented",
-                             "operation is not implemented in this delivery")};
+        .error =
+            current_gateway
+                ? local_error("org.pipewire.Telephony.Error.NotImplemented",
+                              "operation is not implemented in this delivery")
+                : local_error("org.pipewire.Telephony.Error.StaleObject",
+                              "target gateway is no longer available")};
     reply.error->operation = request->operation;
     reply.error->path = request->target.path;
     post_json(command->resultPort, encode_reply(reply));
@@ -238,13 +258,30 @@ void ClientContext::finish_startup(StartupResult result) {
   startup_changed_.notify_all();
 }
 
-void ClientContext::post_ready() {
+void ClientContext::post_ready(std::vector<GatewayProperties> gateways) {
   Event event{.version = kProtocolVersion,
               .clientGeneration = generation_,
               .sequence = ++sequence_,
               .kind = "startup",
-              .payload = {.startup = StartupSnapshot{},
+              .payload = {.startup =
+                              StartupSnapshot{
+                                  .gateways = std::move(gateways),
+                                  .calls = {},
+                                  .transports = {},
+                              },
                           .lifecycle = Lifecycle{.state = "ready"}}};
+  if (!post_json(event_port_, encode_event(event))) {
+    commands_.request_stop();
+  }
+}
+
+void ClientContext::post_gateway(const std::string &kind,
+                                 const GatewayProperties &gateway) {
+  Event event{.version = kProtocolVersion,
+              .clientGeneration = generation_,
+              .sequence = ++sequence_,
+              .kind = kind,
+              .payload = {.gateway = gateway}};
   if (!post_json(event_port_, encode_event(event))) {
     commands_.request_stop();
   }

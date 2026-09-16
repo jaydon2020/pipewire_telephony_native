@@ -184,6 +184,9 @@ TEST_F(MockTelephonyServiceTest, SupportsEmptyAndDynamicObjectTrees) {
 
   EXPECT_TRUE(managed_objects(pwt::test::kRootPath).empty());
   service_->add_gateway();
+  service_->add_second_gateway();
+  EXPECT_EQ(managed_objects(pwt::test::kRootPath).size(), 2);
+  service_->remove_second_gateway();
   EXPECT_EQ(managed_objects(pwt::test::kRootPath)
                 .count(sdbus::ObjectPath{pwt::test::kGatewayPath}),
             1);

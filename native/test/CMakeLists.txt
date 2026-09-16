@@ -51,6 +51,15 @@ add_test(NAME client_connection
 )
 set_tests_properties(client_connection PROPERTIES TIMEOUT 15)
 
+add_executable(test_gateway_registry test_gateway_registry.cpp)
+target_link_libraries(test_gateway_registry
+  PRIVATE pipewire_telephony_native_core pwt_test_support pwt_gtest_main
+)
+add_test(NAME gateway_registry
+  COMMAND "${DBUS_RUN_SESSION}" -- $<TARGET_FILE:test_gateway_registry>
+)
+set_tests_properties(gateway_registry PROPERTIES TIMEOUT 15)
+
 if(PWT_BUILD_DART_INTEGRATION_TESTS)
   add_executable(mock_telephony_server mock_telephony_server.cpp)
   target_link_libraries(mock_telephony_server PRIVATE pwt_test_support)

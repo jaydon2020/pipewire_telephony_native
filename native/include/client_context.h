@@ -13,8 +13,11 @@
 
 #include "command_queue.h"
 #include "pipewire_telephony_native.h"
+#include "telephony_types.h"
 
 namespace pwt {
+
+class GatewayRegistry;
 
 enum class BusType : int32_t { system = 0, session = 1 };
 
@@ -48,7 +51,8 @@ private:
   void run_event_loop();
   void dispatch_commands();
   void finish_startup(StartupResult result);
-  void post_ready();
+  void post_ready(std::vector<GatewayProperties> gateways);
+  void post_gateway(const std::string &kind, const GatewayProperties &gateway);
   void post_unavailable(const std::string &name, const std::string &message);
   bool post_json(int64_t port, const std::string &json) const;
   std::string get_service_owner();
@@ -64,6 +68,7 @@ private:
   std::thread owner_thread_;
   std::unique_ptr<sdbus::IConnection> connection_;
   sdbus::Slot owner_subscription_;
+  std::unique_ptr<GatewayRegistry> gateways_;
   std::string service_owner_;
   uint64_t sequence_{};
   std::mutex startup_mutex_;

@@ -4,6 +4,26 @@
 #include <utility>
 
 namespace pwt::test {
+namespace {
+
+using Properties = std::map<std::string, sdbus::Variant>;
+using Interfaces = std::map<std::string, Properties>;
+
+Interfaces gateway_interfaces(const GatewayState &gateway,
+                              const TransportState &transport) {
+  return {
+      {kGatewayInterface,
+       {{"Address", sdbus::Variant{gateway.address}},
+        {"SpeakerVolume", sdbus::Variant{gateway.speakerVolume}},
+        {"MicrophoneVolume", sdbus::Variant{gateway.microphoneVolume}}}},
+      {kTransportInterface,
+       {{"State", sdbus::Variant{transport.state}},
+        {"Codec", sdbus::Variant{transport.codec}},
+        {"RejectSCO", sdbus::Variant{transport.rejectSco}}}},
+  };
+}
+
+} // namespace
 
 MockTelephonyService::MockTelephonyService(std::string bus_address,
                                            bool populate_initially)
@@ -22,7 +42,7 @@ void MockTelephonyService::start() {
   root_ = sdbus::createObject(*connection_, sdbus::ObjectPath{kRootPath});
   root_->addObjectManager();
   if (populate_initially_) {
-    register_gateway();
+    register_gateway(kGatewayPath, gateway_state_, gateway_);
     register_call();
   }
   connection_->enterEventLoopAsync();
@@ -33,6 +53,7 @@ void MockTelephonyService::stop() {
     return;
   connection_->leaveEventLoop();
   call_.reset();
+  second_gateway_.reset();
   gateway_.reset();
   root_.reset();
   connection_->releaseName(sdbus::ServiceName{kServiceName});
@@ -47,19 +68,44 @@ void MockTelephonyService::restart() {
 void MockTelephonyService::add_gateway() {
   if (gateway_)
     return;
-  register_gateway();
-  gateway_->emitInterfacesAddedSignal(std::vector<sdbus::InterfaceName>{
-      sdbus::InterfaceName{kGatewayInterface},
-      sdbus::InterfaceName{kTransportInterface}});
+  register_gateway(kGatewayPath, gateway_state_, gateway_);
+  root_->emitSignal("InterfacesAdded")
+      .onInterface("org.freedesktop.DBus.ObjectManager")
+      .withArguments(sdbus::ObjectPath{kGatewayPath},
+                     gateway_interfaces(gateway_state_, transport_state_));
+}
+
+void MockTelephonyService::add_second_gateway() {
+  if (second_gateway_)
+    return;
+  register_gateway(kSecondGatewayPath, second_gateway_state_, second_gateway_);
+  root_->emitSignal("InterfacesAdded")
+      .onInterface("org.freedesktop.DBus.ObjectManager")
+      .withArguments(
+          sdbus::ObjectPath{kSecondGatewayPath},
+          gateway_interfaces(second_gateway_state_, transport_state_));
+}
+
+void MockTelephonyService::remove_second_gateway() {
+  if (!second_gateway_)
+    return;
+  root_->emitSignal("InterfacesRemoved")
+      .onInterface("org.freedesktop.DBus.ObjectManager")
+      .withArguments(
+          sdbus::ObjectPath{kSecondGatewayPath},
+          std::vector<std::string>{kGatewayInterface, kTransportInterface});
+  second_gateway_.reset();
 }
 
 void MockTelephonyService::remove_gateway() {
   remove_call();
   if (!gateway_)
     return;
-  gateway_->emitInterfacesRemovedSignal(std::vector<sdbus::InterfaceName>{
-      sdbus::InterfaceName{kGatewayInterface},
-      sdbus::InterfaceName{kTransportInterface}});
+  root_->emitSignal("InterfacesRemoved")
+      .onInterface("org.freedesktop.DBus.ObjectManager")
+      .withArguments(
+          sdbus::ObjectPath{kGatewayPath},
+          std::vector<std::string>{kGatewayInterface, kTransportInterface});
   gateway_.reset();
 }
 
@@ -147,11 +193,13 @@ void MockTelephonyService::invoke(std::string operation, std::string argument) {
   }
 }
 
-void MockTelephonyService::register_gateway() {
-  gateway_ = sdbus::createObject(*connection_, sdbus::ObjectPath{kGatewayPath});
-  gateway_->addObjectManager();
+void MockTelephonyService::register_gateway(
+    const char *path, GatewayState &state,
+    std::unique_ptr<sdbus::IObject> &object) {
+  object = sdbus::createObject(*connection_, sdbus::ObjectPath{path});
+  object->addObjectManager();
 
-  gateway_
+  object
       ->addVTable(
           sdbus::registerMethod("Dial").implementedAs(
               [this](const std::string &number) { invoke("Dial", number); }),
@@ -178,32 +226,32 @@ void MockTelephonyService::register_gateway() {
                 invoke("SendTones", tones);
               }),
           sdbus::registerProperty("Address")
-              .withGetter([this] {
+              .withGetter([this, &state] {
                 const std::lock_guard lock(mutex_);
-                return gateway_state_.address;
+                return state.address;
               })
               .withUpdateBehavior(sdbus::Flags::CONST_PROPERTY_VALUE),
           sdbus::registerProperty("SpeakerVolume")
-              .withGetter([this] {
+              .withGetter([this, &state] {
                 const std::lock_guard lock(mutex_);
-                return gateway_state_.speakerVolume;
+                return state.speakerVolume;
               })
-              .withSetter([this](const uint8_t &value) {
+              .withSetter([this, &state](const uint8_t &value) {
                 const std::lock_guard lock(mutex_);
-                gateway_state_.speakerVolume = value;
+                state.speakerVolume = value;
               }),
           sdbus::registerProperty("MicrophoneVolume")
-              .withGetter([this] {
+              .withGetter([this, &state] {
                 const std::lock_guard lock(mutex_);
-                return gateway_state_.microphoneVolume;
+                return state.microphoneVolume;
               })
-              .withSetter([this](const uint8_t &value) {
+              .withSetter([this, &state](const uint8_t &value) {
                 const std::lock_guard lock(mutex_);
-                gateway_state_.microphoneVolume = value;
+                state.microphoneVolume = value;
               }))
       .forInterface(kGatewayInterface);
 
-  gateway_
+  object
       ->addVTable(sdbus::registerMethod("Activate").implementedAs([this] {
         invoke("Activate");
       }),

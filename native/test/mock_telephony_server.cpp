@@ -8,6 +8,9 @@
 #include <string>
 #include <thread>
 
+#include <poll.h>
+#include <unistd.h>
+
 namespace {
 
 std::atomic_bool running{true};
@@ -23,10 +26,28 @@ int main() {
   }
   std::signal(SIGINT, stop);
   std::signal(SIGTERM, stop);
-  pwt::test::MockTelephonyService service(std::string{address}, false);
+  pwt::test::MockTelephonyService service(std::string{address});
   service.start();
   std::cout << "READY" << std::endl;
   while (running) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    pollfd input{.fd = STDIN_FILENO, .events = POLLIN, .revents = 0};
+    if (poll(&input, 1, 10) <= 0 || (input.revents & POLLIN) == 0) {
+      continue;
+    }
+    std::string command;
+    if (!std::getline(std::cin, command)) {
+      break;
+    }
+    if (command == "add") {
+      service.add_gateway();
+    } else if (command == "remove") {
+      service.remove_gateway();
+    } else if (command == "add-second") {
+      service.add_second_gateway();
+    } else if (command == "remove-second") {
+      service.remove_second_gateway();
+    } else if (command == "quit") {
+      break;
+    }
   }
 }

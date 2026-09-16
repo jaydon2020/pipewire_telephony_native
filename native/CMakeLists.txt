@@ -26,6 +26,7 @@ set(PIPEWIRE_TELEPHONY_CORE_SOURCES
   src/dart_api_dl.c
   src/client_context.cpp
   src/command_queue.cpp
+  src/gateway_registry.cpp
   src/telephony_codec.cpp
 )
 
@@ -34,7 +35,7 @@ add_library(pipewire_telephony_native_core STATIC
 )
 
 target_include_directories(pipewire_telephony_native_core
-  PUBLIC include
+  PUBLIC include generated
 )
 
 target_compile_definitions(pipewire_telephony_native_core

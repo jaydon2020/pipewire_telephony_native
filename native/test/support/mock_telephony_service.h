@@ -16,6 +16,7 @@ namespace pwt::test {
 inline constexpr auto kServiceName = "org.pipewire.Telephony";
 inline constexpr auto kRootPath = "/org/pipewire/Telephony";
 inline constexpr auto kGatewayPath = "/org/pipewire/Telephony/ag1";
+inline constexpr auto kSecondGatewayPath = "/org/pipewire/Telephony/phone42";
 inline constexpr auto kCallPath = "/org/pipewire/Telephony/ag1/call1";
 inline constexpr auto kGatewayInterface =
     "org.pipewire.Telephony.AudioGateway1";
@@ -57,6 +58,8 @@ public:
   void restart();
   void add_gateway();
   void remove_gateway();
+  void add_second_gateway();
+  void remove_second_gateway();
   void add_call();
   void remove_call();
 
@@ -73,7 +76,8 @@ private:
     std::string message;
   };
 
-  void register_gateway();
+  void register_gateway(const char *path, GatewayState &state,
+                        std::unique_ptr<sdbus::IObject> &object);
   void register_call();
   void invoke(std::string operation, std::string argument = {});
 
@@ -81,6 +85,9 @@ private:
   const bool populate_initially_;
   mutable std::mutex mutex_;
   GatewayState gateway_state_;
+  GatewayState second_gateway_state_{.address = "11:22:33:44:55:66",
+                                     .speakerVolume = 7,
+                                     .microphoneVolume = 8};
   TransportState transport_state_;
   CallState call_state_;
   std::map<std::string, Failure> failures_;
@@ -88,6 +95,7 @@ private:
   std::unique_ptr<sdbus::IConnection> connection_;
   std::unique_ptr<sdbus::IObject> root_;
   std::unique_ptr<sdbus::IObject> gateway_;
+  std::unique_ptr<sdbus::IObject> second_gateway_;
   std::unique_ptr<sdbus::IObject> call_;
 };
 
