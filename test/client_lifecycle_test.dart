@@ -478,6 +478,79 @@ void main() {
         },
       );
 
+      test(
+        'SCO transport tracks properties, commands, and interface reuse',
+        () async {
+          final service = await startMockService();
+          final client = PipeWireTelephonyClient(bus: PipeWireBus.session);
+          await client.connect();
+          final gateway = client.gateways.single;
+          final transport = gateway.transport!;
+
+          expect(transport.objectPath, gateway.objectPath);
+          expect(transport.rawState, 'active');
+          expect(transport.state, PipeWireTransportState.active);
+          expect(transport.codec, 2);
+          expect(transport.rejectSco, isFalse);
+
+          await transport.activate();
+          final rejectChanged = transport.propertiesChanged.firstWhere(
+            (names) => names.contains('RejectSCO'),
+          );
+          await transport.setRejectSco(true);
+          await rejectChanged;
+          expect(transport.rejectSco, isTrue);
+
+          final stateChanged = transport.propertiesChanged.firstWhere(
+            (names) => names.contains('State') && names.contains('Codec'),
+          );
+          service.stdin.writeln('prepare-refresh');
+          await service.stdin.flush();
+          await stateChanged;
+          expect(transport.rawState, 'future-state');
+          expect(transport.state, PipeWireTransportState.unknown);
+          expect(transport.codec, 255);
+          await transport.refresh();
+
+          final removed = client.gatewayChanged.firstWhere(
+            (changed) =>
+                identical(changed, gateway) && changed.transport == null,
+          );
+          service.stdin.writeln('remove-transport');
+          await service.stdin.flush();
+          await removed;
+          expect(transport.isValid, isFalse);
+          expect(transport.ensureValid, throwsStateError);
+
+          final added = client.gatewayChanged.firstWhere(
+            (changed) =>
+                identical(changed, gateway) && changed.transport != null,
+          );
+          service.stdin.writeln('add-transport');
+          await service.stdin.flush();
+          await added;
+          final replacement = gateway.transport!;
+          expect(replacement.incarnation, greaterThan(transport.incarnation));
+
+          service.stdin.writeln('fail-activate');
+          await service.stdin.flush();
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+          await expectLater(
+            replacement.activate(),
+            throwsA(
+              isA<PipeWireTelephonyException>().having(
+                (error) => error.name,
+                'name',
+                'org.pipewire.Telephony.Error.NotSupported',
+              ),
+            ),
+          );
+
+          await client.close();
+          await stopMockService(service);
+        },
+      );
+
       test('missing service has a bounded unavailable result', () async {
         final client = PipeWireTelephonyClient(
           bus: PipeWireBus.session,

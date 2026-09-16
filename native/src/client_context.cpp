@@ -163,6 +163,9 @@ void ClientContext::run() {
         },
         [this](const std::string &kind, const CallProperties &call) {
           post_call(kind, call);
+        },
+        [this](const std::string &kind, const TransportProperties &transport) {
+          post_transport(kind, transport);
         });
     gateways_->synchronize();
     while (connection_->processPendingEvent()) {
@@ -276,6 +279,10 @@ void ClientContext::dispatch_request(const Request &request,
   } else if (request.target.interface == kCallInterface && gateways_) {
     gateway_path = gateways_->gateway_path_for_call(
         request.target.path, request.target.objectIncarnation);
+  } else if (request.target.interface == kTransportInterface && gateways_ &&
+             gateways_->contains_transport(request.target.path,
+                                           request.target.objectIncarnation)) {
+    gateway_path = request.target.path;
   }
   if (!gateway_path) {
     reject("org.pipewire.Telephony.Error.StaleObject",
@@ -284,12 +291,19 @@ void ClientContext::dispatch_request(const Request &request,
   }
 
   const bool refresh = request.operation == "refreshGateway" ||
-                       request.operation == "refreshCall";
+                       request.operation == "refreshCall" ||
+                       request.operation == "refreshTransport";
   const bool call_operation = request.operation == "refreshCall" ||
                               request.operation == "answer" ||
                               request.operation == "hangup";
+  const bool transport_operation = request.operation == "refreshTransport" ||
+                                   request.operation == "activate" ||
+                                   request.operation == "setRejectSco";
   if ((call_operation && request.target.interface != kCallInterface) ||
-      (!call_operation && request.target.interface != kGatewayInterface)) {
+      (transport_operation &&
+       request.target.interface != kTransportInterface) ||
+      (!call_operation && !transport_operation &&
+       request.target.interface != kGatewayInterface)) {
     reject("org.pipewire.Telephony.Error.InvalidArguments",
            "operation does not match target interface");
     return;
@@ -322,9 +336,10 @@ void ClientContext::dispatch_request(const Request &request,
   try {
     auto &target = *proxy;
     if (refresh) {
-      const auto interface = request.operation == "refreshGateway"
-                                 ? kGatewayInterface
-                                 : kCallInterface;
+      const auto interface =
+          request.operation == "refreshGateway" ? kGatewayInterface
+          : request.operation == "refreshCall"  ? kCallInterface
+                                                : kTransportInterface;
       target.callMethodAsync("GetAll")
           .onInterface(kPropertiesInterface)
           .withArguments(std::string{interface})
@@ -382,6 +397,8 @@ void ClientContext::dispatch_request(const Request &request,
       method("HoldAndAnswer", kGatewayInterface);
     } else if (request.operation == "createMultiparty") {
       method("CreateMultiparty", kGatewayInterface);
+    } else if (request.operation == "activate") {
+      method("Activate", kTransportInterface);
     } else if (request.operation == "setSpeakerVolume" ||
                request.operation == "setMicrophoneVolume") {
       if (!request.arguments.volume) {
@@ -416,8 +433,37 @@ void ClientContext::dispatch_request(const Request &request,
                   complete_refresh(id, properties, std::move(refresh_error));
                 });
           });
-    } else if (request.target.interface == kTransportInterface) {
-      throw std::invalid_argument("transport is not available");
+    } else if (request.operation == "setRejectSco") {
+      if (!request.arguments.value) {
+        throw std::invalid_argument("value argument is required");
+      }
+      target.callMethodAsync("Set")
+          .onInterface(kPropertiesInterface)
+          .withArguments(std::string{kTransportInterface},
+                         std::string{"RejectSCO"},
+                         sdbus::Variant{*request.arguments.value})
+          .uponReplyInvoke([this, complete, id = request.requestId,
+                            path = request.target.path](
+                               std::optional<sdbus::Error> error) {
+            if (error) {
+              complete(std::move(error));
+              return;
+            }
+            const auto proxy = operation_proxies_.find(path);
+            if (pending_.find(id) == pending_.end() ||
+                proxy == operation_proxies_.end()) {
+              return;
+            }
+            proxy->second->callMethodAsync("GetAll")
+                .onInterface(kPropertiesInterface)
+                .withArguments(std::string{kTransportInterface})
+                .uponReplyInvoke([this, id](
+                                     std::optional<sdbus::Error> refresh_error,
+                                     const std::map<std::string, sdbus::Variant>
+                                         &properties) {
+                  complete_refresh(id, properties, std::move(refresh_error));
+                });
+          });
     } else {
       throw std::invalid_argument("operation is not implemented");
     }
@@ -469,6 +515,8 @@ void ClientContext::complete_refresh(
     applied = gateways_->apply_gateway_refresh(path, incarnation, properties);
   } else if (request == "refreshCall") {
     applied = gateways_->apply_call_refresh(path, incarnation, properties);
+  } else if (request == "refreshTransport" || request == "setRejectSco") {
+    applied = gateways_->apply_transport_refresh(path, incarnation, properties);
   }
   if (!applied) {
     auto stale = local_error("org.pipewire.Telephony.Error.StaleObject",
@@ -556,7 +604,7 @@ void ClientContext::post_ready(DiscoverySnapshot snapshot) {
                               StartupSnapshot{
                                   .gateways = std::move(snapshot.gateways),
                                   .calls = std::move(snapshot.calls),
-                                  .transports = {},
+                                  .transports = std::move(snapshot.transports),
                               },
                           .lifecycle = Lifecycle{.state = "ready"}}};
   if (!post_json(event_port_, encode_event(event))) {
@@ -583,6 +631,18 @@ void ClientContext::post_call(const std::string &kind,
               .sequence = ++sequence_,
               .kind = kind,
               .payload = {.call = call}};
+  if (!post_json(event_port_, encode_event(event))) {
+    commands_.request_stop();
+  }
+}
+
+void ClientContext::post_transport(const std::string &kind,
+                                   const TransportProperties &transport) {
+  Event event{.version = kProtocolVersion,
+              .clientGeneration = generation_,
+              .sequence = ++sequence_,
+              .kind = kind,
+              .payload = {.transport = transport}};
   if (!post_json(event_port_, encode_event(event))) {
     commands_.request_stop();
   }

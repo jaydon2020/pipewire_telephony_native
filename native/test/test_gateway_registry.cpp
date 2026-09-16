@@ -29,12 +29,13 @@ TEST(GatewayRegistry, EmptyServiceHasAnEmptySnapshot) {
       sdbus::createSessionBusConnectionWithAddress(private_bus_address());
   pwt::GatewayRegistry registry(
       *connection, [](const auto &, const auto &) {},
-      [](const auto &, const auto &) {});
+      [](const auto &, const auto &) {}, [](const auto &, const auto &) {});
 
   registry.synchronize();
   const auto snapshot = registry.activate();
   EXPECT_TRUE(snapshot.gateways.empty());
   EXPECT_TRUE(snapshot.calls.empty());
+  EXPECT_TRUE(snapshot.transports.empty());
 }
 
 TEST(GatewayRegistry, DiscoversMultipleGatewaysAndRenewsReusedPaths) {
@@ -63,12 +64,14 @@ TEST(GatewayRegistry, DiscoversMultipleGatewaysAndRenewsReusedPaths) {
           call_events.emplace_back(kind, call);
         }
         changed.notify_all();
-      });
+      },
+      [](const auto &, const auto &) {});
 
   registry.synchronize();
   const auto snapshot = registry.activate();
   ASSERT_EQ(snapshot.gateways.size(), 2);
   ASSERT_EQ(snapshot.calls.size(), 1);
+  ASSERT_EQ(snapshot.transports.size(), 2);
   EXPECT_EQ(snapshot.calls.front().gatewayPath, pwt::test::kGatewayPath);
   std::map<std::string, pwt::GatewayProperties> gateways;
   for (const auto &gateway : snapshot.gateways) {
@@ -116,6 +119,68 @@ TEST(GatewayRegistry, DiscoversMultipleGatewaysAndRenewsReusedPaths) {
   connection->leaveEventLoop();
 }
 
+TEST(GatewayRegistry, RenewsTransportIdentityAfterInterfaceReuse) {
+  pwt::test::MockTelephonyService service(private_bus_address());
+  service.start();
+  auto connection =
+      sdbus::createSessionBusConnectionWithAddress(private_bus_address());
+
+  std::mutex mutex;
+  std::condition_variable changed;
+  std::vector<std::pair<std::string, pwt::GatewayProperties>> gateway_events;
+  std::vector<std::pair<std::string, pwt::TransportProperties>>
+      transport_events;
+  pwt::GatewayRegistry registry(
+      *connection,
+      [&](const std::string &kind, const pwt::GatewayProperties &gateway) {
+        {
+          const std::lock_guard lock(mutex);
+          gateway_events.emplace_back(kind, gateway);
+        }
+        changed.notify_all();
+      },
+      [](const auto &, const auto &) {},
+      [&](const std::string &kind, const pwt::TransportProperties &transport) {
+        {
+          const std::lock_guard lock(mutex);
+          transport_events.emplace_back(kind, transport);
+        }
+        changed.notify_all();
+      });
+  registry.synchronize();
+  const auto snapshot = registry.activate();
+  ASSERT_EQ(snapshot.transports.size(), 1);
+  const auto original = snapshot.transports.front();
+  EXPECT_EQ(original.path, pwt::test::kGatewayPath);
+  EXPECT_EQ(original.state, "active");
+  EXPECT_EQ(original.codec, 2);
+  EXPECT_EQ(original.rejectSco, false);
+  EXPECT_TRUE(service.invocations().empty());
+
+  connection->enterEventLoopAsync();
+  service.remove_transport();
+  service.add_transport();
+
+  std::unique_lock lock(mutex);
+  ASSERT_TRUE(changed.wait_for(lock, 2s, [&] {
+    return transport_events.size() >= 2 && gateway_events.size() >= 2;
+  }));
+  EXPECT_EQ(transport_events[0].first, "transportRemoved");
+  EXPECT_EQ(transport_events[1].first, "transportAdded");
+  EXPECT_EQ(transport_events[0].second.incarnation, original.incarnation);
+  EXPECT_GT(transport_events[1].second.incarnation, original.incarnation);
+  EXPECT_EQ(gateway_events[0].first, "gatewayChanged");
+  EXPECT_EQ(gateway_events[1].first, "gatewayChanged");
+  const auto replacement = transport_events[1].second.incarnation;
+  lock.unlock();
+
+  EXPECT_FALSE(registry.contains_transport(pwt::test::kGatewayPath,
+                                           original.incarnation));
+  EXPECT_TRUE(
+      registry.contains_transport(pwt::test::kGatewayPath, replacement));
+  connection->leaveEventLoop();
+}
+
 TEST(GatewayRegistry, AppliesPartialChangesAndRefreshesInvalidations) {
   pwt::test::MockTelephonyService service(private_bus_address());
   service.start();
@@ -145,7 +210,8 @@ TEST(GatewayRegistry, AppliesPartialChangesAndRefreshesInvalidations) {
           call_events.push_back(call);
         }
         changed.notify_all();
-      });
+      },
+      [](const auto &, const auto &) {});
   registry.synchronize();
   registry.activate();
   connection->enterEventLoopAsync();

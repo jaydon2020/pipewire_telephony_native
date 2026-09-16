@@ -50,6 +50,10 @@ int main() {
       service.add_call();
     } else if (command == "remove-call") {
       service.remove_call();
+    } else if (command == "add-transport") {
+      service.add_transport();
+    } else if (command == "remove-transport") {
+      service.remove_transport();
     } else if (command == "change-properties") {
       service.change_gateway_state({.address = "AA:BB:CC:DD:EE:FF",
                                     .speakerVolume = 0,
@@ -88,6 +92,8 @@ int main() {
                                  .multiparty = false,
                                  .state = "future-state"},
                                 {});
+      service.set_transport_state(
+          {.state = "future-state", .codec = 255, .rejectSco = false});
     } else if (command == "delay-operations") {
       service.set_operation_delay(std::chrono::milliseconds{500});
     } else if (command == "clear-operation-delay") {
@@ -102,6 +108,9 @@ int main() {
       service.fail_next("SetSpeakerVolume",
                         "org.pipewire.Telephony.Error.NotSupported",
                         "speaker volume is unavailable");
+    } else if (command == "fail-activate") {
+      service.fail_next("Activate", "org.pipewire.Telephony.Error.NotSupported",
+                        "SCO activation is unavailable");
     } else if (command == "quit") {
       break;
     }

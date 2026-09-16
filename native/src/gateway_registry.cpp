@@ -13,6 +13,8 @@ namespace {
 constexpr auto kService = "org.pipewire.Telephony";
 constexpr auto kRootPath = "/org/pipewire/Telephony";
 constexpr auto kGatewayInterface = "org.pipewire.Telephony.AudioGateway1";
+constexpr auto kTransportInterface =
+    "org.pipewire.Telephony.AudioGatewayTransport1";
 constexpr auto kCallInterface = "org.pipewire.Telephony.Call1";
 constexpr auto kPropertiesInterface = "org.freedesktop.DBus.Properties";
 
@@ -64,9 +66,11 @@ private:
 
 GatewayRegistry::GatewayRegistry(sdbus::IConnection &connection,
                                  GatewayEventCallback gateway_callback,
-                                 CallEventCallback call_callback)
+                                 CallEventCallback call_callback,
+                                 TransportEventCallback transport_callback)
     : connection_(connection), gateway_callback_(std::move(gateway_callback)),
       call_callback_(std::move(call_callback)),
+      transport_callback_(std::move(transport_callback)),
       proxy_(sdbus::createProxy(connection, sdbus::ServiceName{kService},
                                 sdbus::ObjectPath{kRootPath})),
       manager_(std::make_unique<ObjectManager>(*proxy_, *this)) {
@@ -101,6 +105,10 @@ DiscoverySnapshot GatewayRegistry::activate() {
   for (const auto &[path, gateway] : gateways_) {
     snapshot.gateways.push_back(gateway);
   }
+  snapshot.transports.reserve(transports_.size());
+  for (const auto &[path, transport] : transports_) {
+    snapshot.transports.push_back(transport);
+  }
   for (auto &[path, registry] : call_registries_) {
     auto calls = registry->activate();
     snapshot.calls.insert(snapshot.calls.end(), calls.begin(), calls.end());
@@ -109,6 +117,11 @@ DiscoverySnapshot GatewayRegistry::activate() {
 }
 
 void GatewayRegistry::invalidate_all() {
+  while (!transports_.empty()) {
+    const auto transport = transports_.begin()->second;
+    transports_.erase(transports_.begin());
+    transport_callback_("transportRemoved", transport);
+  }
   while (!gateways_.empty()) {
     const auto gateway = gateways_.begin()->second;
     if (const auto calls = call_registries_.find(gateway.path);
@@ -122,6 +135,8 @@ void GatewayRegistry::invalidate_all() {
   refresh_revisions_.clear();
   property_proxies_.clear();
   revisions_.clear();
+  transport_refresh_revisions_.clear();
+  transport_revisions_.clear();
 }
 
 bool GatewayRegistry::contains(const std::string &path,
@@ -136,6 +151,13 @@ bool GatewayRegistry::contains_call(const std::string &path,
   return std::ranges::any_of(call_registries_, [&](const auto &entry) {
     return entry.second->contains(path, incarnation);
   });
+}
+
+bool GatewayRegistry::contains_transport(const std::string &path,
+                                         uint64_t incarnation) const {
+  const auto transport = transports_.find(path);
+  return transport != transports_.end() &&
+         transport->second.incarnation == incarnation;
 }
 
 std::optional<std::string>
@@ -167,6 +189,16 @@ bool GatewayRegistry::apply_call_refresh(const std::string &path,
   });
 }
 
+bool GatewayRegistry::apply_transport_refresh(const std::string &path,
+                                              uint64_t incarnation,
+                                              const Properties &properties) {
+  if (!contains_transport(path, incarnation)) {
+    return false;
+  }
+  replace_transport_properties(path, properties);
+  return true;
+}
+
 void GatewayRegistry::reconcile(const std::string &gateway_path) {
   const auto gateway = gateways_.find(gateway_path);
   if (gateway == gateways_.end()) {
@@ -174,6 +206,11 @@ void GatewayRegistry::reconcile(const std::string &gateway_path) {
   }
   refresh_gateway(gateway_path, gateway->second.incarnation,
                   revisions_[gateway_path]);
+  if (const auto transport = transports_.find(gateway_path);
+      transport != transports_.end()) {
+    refresh_transport(gateway_path, transport->second.incarnation,
+                      transport_revisions_[gateway_path]);
+  }
   if (const auto calls = call_registries_.find(gateway_path);
       calls != call_registries_.end()) {
     calls->second->reconcile();
@@ -188,6 +225,42 @@ void GatewayRegistry::properties_changed(
       if (registry->properties_changed(path, interface, changed, invalidated)) {
         return;
       }
+    }
+    return;
+  }
+  if (interface == kTransportInterface) {
+    const auto found = transports_.find(path);
+    if (found == transports_.end()) {
+      return;
+    }
+    auto &transport = found->second;
+    std::vector<std::string> names;
+    const auto apply = [&]<typename T>(const char *name,
+                                       std::optional<T> &target) {
+      if (changed.contains(name)) {
+        target = property<T>(changed, name);
+        names.emplace_back(name);
+      }
+      if (std::ranges::find(invalidated, name) != invalidated.end()) {
+        target.reset();
+        if (std::ranges::find(names, name) == names.end()) {
+          names.emplace_back(name);
+        }
+      }
+    };
+    apply("State", transport.state);
+    apply("Codec", transport.codec);
+    apply("RejectSCO", transport.rejectSco);
+    if (names.empty()) {
+      return;
+    }
+    transport.changed = names;
+    const auto revision = transport_revisions_[path] = ++next_revision_;
+    if (!synchronizing_) {
+      transport_callback_("transportChanged", transport);
+    }
+    if (!invalidated.empty()) {
+      refresh_transport(path, transport.incarnation, revision);
     }
     return;
   }
@@ -289,47 +362,139 @@ void GatewayRegistry::replace_gateway_properties(const std::string &path,
   }
 }
 
+void GatewayRegistry::refresh_transport(const std::string &path,
+                                        uint64_t incarnation,
+                                        uint64_t revision) {
+  transport_refresh_revisions_.insert_or_assign(path, revision);
+  auto &proxy = property_proxies_[path];
+  if (!proxy) {
+    proxy = sdbus::createProxy(connection_, sdbus::ServiceName{kService},
+                               sdbus::ObjectPath{path});
+  }
+  const std::weak_ptr<int> lifetime = lifetime_;
+  proxy->callMethodAsync("GetAll")
+      .onInterface(kPropertiesInterface)
+      .withArguments(std::string{kTransportInterface})
+      .uponReplyInvoke([lifetime, this, path, incarnation,
+                        revision](std::optional<sdbus::Error> error,
+                                  const Properties &properties) {
+        if (lifetime.expired()) {
+          return;
+        }
+        const auto requested = transport_refresh_revisions_.find(path);
+        if (requested == transport_refresh_revisions_.end() ||
+            requested->second != revision) {
+          return;
+        }
+        transport_refresh_revisions_.erase(requested);
+        const auto transport = transports_.find(path);
+        if (error || transport == transports_.end() ||
+            transport->second.incarnation != incarnation) {
+          return;
+        }
+        if (transport_revisions_[path] != revision) {
+          refresh_transport(path, incarnation, transport_revisions_[path]);
+          return;
+        }
+        replace_transport_properties(path, properties);
+      });
+}
+
+void GatewayRegistry::replace_transport_properties(
+    const std::string &path, const Properties &properties) {
+  const auto found = transports_.find(path);
+  if (found == transports_.end()) {
+    return;
+  }
+  auto next = found->second;
+  next.changed.clear();
+  next.state = property<std::string>(properties, "State");
+  next.codec = property<uint8_t>(properties, "Codec");
+  next.rejectSco = property<bool>(properties, "RejectSCO");
+  if (next.state != found->second.state)
+    next.changed.emplace_back("State");
+  if (next.codec != found->second.codec)
+    next.changed.emplace_back("Codec");
+  if (next.rejectSco != found->second.rejectSco)
+    next.changed.emplace_back("RejectSCO");
+  transport_revisions_[path] = ++next_revision_;
+  found->second = next;
+  if (!synchronizing_ && !next.changed.empty()) {
+    transport_callback_("transportChanged", next);
+  }
+}
+
 void GatewayRegistry::interfaces_added(const sdbus::ObjectPath &object_path,
                                        const Interfaces &interfaces) {
   const std::string path = object_path;
   if (!is_gateway_path(path)) {
     return;
   }
-  const auto interface = interfaces.find(kGatewayInterface);
-  if (interface == interfaces.end()) {
-    return;
+  std::optional<std::pair<bool, GatewayProperties>> gateway_event;
+  std::vector<CallProperties> calls;
+  if (const auto interface = interfaces.find(kGatewayInterface);
+      interface != interfaces.end()) {
+    const auto existing = gateways_.find(path);
+    const bool added = existing == gateways_.end();
+    GatewayProperties gateway{
+        .path = path,
+        .incarnation =
+            added ? ++next_incarnation_ : existing->second.incarnation,
+        .address = property<std::string>(interface->second, "Address"),
+        .speakerVolume = property<uint8_t>(interface->second, "SpeakerVolume"),
+        .microphoneVolume =
+            property<uint8_t>(interface->second, "MicrophoneVolume"),
+        .changed = {},
+    };
+    gateways_.insert_or_assign(path, gateway);
+    revisions_[path] = ++next_revision_;
+    gateway_event = std::pair{added, gateway};
+    if (added) {
+      auto registry = std::make_unique<CallRegistry>(
+          connection_, path, next_incarnation_,
+          [this](const std::string &kind, const CallProperties &call) {
+            call_callback_(kind, call);
+          });
+      registry->synchronize();
+      if (!synchronizing_) {
+        calls = registry->activate();
+      }
+      call_registries_.insert_or_assign(path, std::move(registry));
+    }
   }
 
-  const auto existing = gateways_.find(path);
-  const bool added = existing == gateways_.end();
-  GatewayProperties gateway{
-      .path = path,
-      .incarnation = added ? ++next_incarnation_ : existing->second.incarnation,
-      .address = property<std::string>(interface->second, "Address"),
-      .speakerVolume = property<uint8_t>(interface->second, "SpeakerVolume"),
-      .microphoneVolume =
-          property<uint8_t>(interface->second, "MicrophoneVolume"),
-      .changed = {},
-  };
-  gateways_.insert_or_assign(path, gateway);
-  revisions_[path] = ++next_revision_;
-  std::vector<CallProperties> calls;
-  if (added) {
-    auto registry = std::make_unique<CallRegistry>(
-        connection_, path, next_incarnation_,
-        [this](const std::string &kind, const CallProperties &call) {
-          call_callback_(kind, call);
-        });
-    registry->synchronize();
-    if (!synchronizing_) {
-      calls = registry->activate();
-    }
-    call_registries_.insert_or_assign(path, std::move(registry));
+  std::optional<std::pair<bool, TransportProperties>> transport_event;
+  if (const auto interface = interfaces.find(kTransportInterface);
+      interface != interfaces.end() && gateways_.contains(path)) {
+    const auto existing = transports_.find(path);
+    const bool added = existing == transports_.end();
+    TransportProperties transport{
+        .path = path,
+        .incarnation =
+            added ? ++next_incarnation_ : existing->second.incarnation,
+        .state = property<std::string>(interface->second, "State"),
+        .codec = property<uint8_t>(interface->second, "Codec"),
+        .rejectSco = property<bool>(interface->second, "RejectSCO"),
+        .changed = {},
+    };
+    transports_.insert_or_assign(path, transport);
+    transport_revisions_[path] = ++next_revision_;
+    transport_event = std::pair{added, transport};
   }
-  if (!synchronizing_) {
-    gateway_callback_(added ? "gatewayAdded" : "gatewayChanged", gateway);
+
+  if (!synchronizing_ && gateway_event) {
+    gateway_callback_(gateway_event->first ? "gatewayAdded" : "gatewayChanged",
+                      gateway_event->second);
     for (const auto &call : calls) {
       call_callback_("callAdded", call);
+    }
+  }
+  if (!synchronizing_ && transport_event) {
+    transport_callback_(transport_event->first ? "transportAdded"
+                                               : "transportChanged",
+                        transport_event->second);
+    if (!gateway_event) {
+      gateway_callback_("gatewayChanged", gateways_.at(path));
     }
   }
 }
@@ -337,10 +502,31 @@ void GatewayRegistry::interfaces_added(const sdbus::ObjectPath &object_path,
 void GatewayRegistry::interfaces_removed(
     const sdbus::ObjectPath &object_path,
     const std::vector<std::string> &interfaces) {
-  if (std::ranges::find(interfaces, kGatewayInterface) == interfaces.end()) {
+  const std::string path = object_path;
+  const bool gateway_removed =
+      std::ranges::find(interfaces, kGatewayInterface) != interfaces.end();
+  const bool transport_removed =
+      gateway_removed ||
+      std::ranges::find(interfaces, kTransportInterface) != interfaces.end();
+  if (transport_removed) {
+    if (const auto transport = transports_.find(path);
+        transport != transports_.end()) {
+      const auto removed = transport->second;
+      transports_.erase(transport);
+      transport_refresh_revisions_.erase(path);
+      transport_revisions_.erase(path);
+      if (!synchronizing_) {
+        transport_callback_("transportRemoved", removed);
+        if (!gateway_removed && gateways_.contains(path)) {
+          gateway_callback_("gatewayChanged", gateways_.at(path));
+        }
+      }
+    }
+  }
+  if (!gateway_removed) {
     return;
   }
-  const auto gateway = gateways_.find(std::string{object_path});
+  const auto gateway = gateways_.find(path);
   if (gateway == gateways_.end()) {
     return;
   }

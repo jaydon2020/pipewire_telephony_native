@@ -77,6 +77,8 @@ private:
   void post_ready(DiscoverySnapshot snapshot);
   void post_gateway(const std::string &kind, const GatewayProperties &gateway);
   void post_call(const std::string &kind, const CallProperties &call);
+  void post_transport(const std::string &kind,
+                      const TransportProperties &transport);
   void post_unavailable(const std::string &name, const std::string &message);
   bool post_json(int64_t port, const std::string &json) const;
   std::string get_service_owner();

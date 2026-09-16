@@ -17,6 +17,7 @@ class CallRegistry;
 struct DiscoverySnapshot {
   std::vector<GatewayProperties> gateways;
   std::vector<CallProperties> calls;
+  std::vector<TransportProperties> transports;
 };
 
 class GatewayRegistry {
@@ -25,10 +26,13 @@ public:
       std::function<void(const std::string &, const GatewayProperties &)>;
   using CallEventCallback =
       std::function<void(const std::string &, const CallProperties &)>;
+  using TransportEventCallback =
+      std::function<void(const std::string &, const TransportProperties &)>;
 
   GatewayRegistry(sdbus::IConnection &connection,
                   GatewayEventCallback gateway_callback,
-                  CallEventCallback call_callback);
+                  CallEventCallback call_callback,
+                  TransportEventCallback transport_callback);
   ~GatewayRegistry();
 
   GatewayRegistry(const GatewayRegistry &) = delete;
@@ -39,6 +43,7 @@ public:
   void invalidate_all();
   bool contains(const std::string &path, uint64_t incarnation) const;
   bool contains_call(const std::string &path, uint64_t incarnation) const;
+  bool contains_transport(const std::string &path, uint64_t incarnation) const;
   std::optional<std::string> gateway_path_for_call(const std::string &path,
                                                    uint64_t incarnation) const;
   bool apply_gateway_refresh(
@@ -47,6 +52,9 @@ public:
   bool
   apply_call_refresh(const std::string &path, uint64_t incarnation,
                      const std::map<std::string, sdbus::Variant> &properties);
+  bool apply_transport_refresh(
+      const std::string &path, uint64_t incarnation,
+      const std::map<std::string, sdbus::Variant> &properties);
   void reconcile(const std::string &gateway_path);
 
 private:
@@ -65,19 +73,27 @@ private:
                        uint64_t revision);
   void replace_gateway_properties(const std::string &path,
                                   const Properties &properties);
+  void refresh_transport(const std::string &path, uint64_t incarnation,
+                         uint64_t revision);
+  void replace_transport_properties(const std::string &path,
+                                    const Properties &properties);
 
   sdbus::IConnection &connection_;
   GatewayEventCallback gateway_callback_;
   CallEventCallback call_callback_;
+  TransportEventCallback transport_callback_;
   std::unique_ptr<sdbus::IProxy> proxy_;
   std::unique_ptr<ObjectManager> manager_;
   sdbus::Slot properties_subscription_;
   std::map<std::string, GatewayProperties> gateways_;
+  std::map<std::string, TransportProperties> transports_;
   std::map<std::string, std::unique_ptr<CallRegistry>> call_registries_;
   uint64_t next_incarnation_{};
   std::map<std::string, uint64_t> revisions_;
   std::map<std::string, std::unique_ptr<sdbus::IProxy>> property_proxies_;
   std::map<std::string, uint64_t> refresh_revisions_;
+  std::map<std::string, uint64_t> transport_revisions_;
+  std::map<std::string, uint64_t> transport_refresh_revisions_;
   uint64_t next_revision_{};
   bool synchronizing_{true};
   std::shared_ptr<int> lifetime_{std::make_shared<int>(0)};

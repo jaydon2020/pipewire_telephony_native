@@ -19,3 +19,5 @@ enum PipeWireCallState {
   disconnected,
   unknown,
 }
+
+enum PipeWireTransportState { error, idle, pending, active, unknown }

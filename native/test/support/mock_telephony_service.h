@@ -63,6 +63,8 @@ public:
   void remove_second_gateway();
   void add_call();
   void remove_call();
+  void add_transport();
+  void remove_transport();
 
   std::string unique_owner() const;
   void fail_next(std::string operation, std::string name, std::string message);

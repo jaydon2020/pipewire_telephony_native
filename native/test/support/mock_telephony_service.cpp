@@ -126,6 +126,25 @@ void MockTelephonyService::remove_call() {
   call_.reset();
 }
 
+void MockTelephonyService::add_transport() {
+  root_->emitSignal("InterfacesAdded")
+      .onInterface("org.freedesktop.DBus.ObjectManager")
+      .withArguments(
+          sdbus::ObjectPath{kGatewayPath},
+          Interfaces{
+              {kTransportInterface,
+               {{"State", sdbus::Variant{transport_state_.state}},
+                {"Codec", sdbus::Variant{transport_state_.codec}},
+                {"RejectSCO", sdbus::Variant{transport_state_.rejectSco}}}}});
+}
+
+void MockTelephonyService::remove_transport() {
+  root_->emitSignal("InterfacesRemoved")
+      .onInterface("org.freedesktop.DBus.ObjectManager")
+      .withArguments(sdbus::ObjectPath{kGatewayPath},
+                     std::vector<std::string>{kTransportInterface});
+}
+
 std::string MockTelephonyService::unique_owner() const {
   if (!connection_)
     return {};
@@ -350,6 +369,7 @@ void MockTelephonyService::register_gateway(
                         return transport_state_.rejectSco;
                       })
                       .withSetter([this](const bool &value) {
+                        invoke("SetRejectSCO", value ? "true" : "false");
                         const std::lock_guard lock(mutex_);
                         transport_state_.rejectSco = value;
                       }))

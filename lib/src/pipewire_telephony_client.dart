@@ -12,6 +12,7 @@ import 'internal/library_loader.dart';
 
 part 'pipewire_audio_gateway.dart';
 part 'pipewire_call.dart';
+part 'pipewire_telephony_transport.dart';
 
 final class PipeWireTelephonyClient {
   PipeWireTelephonyClient({
@@ -75,6 +76,8 @@ final class PipeWireTelephonyClient {
     await Future.wait([
       for (final gateway in gateways) gateway.refresh(),
       for (final call in calls) call.refresh(),
+      for (final gateway in gateways)
+        if (gateway.transport case final transport?) transport.refresh(),
     ]);
   }
 
@@ -229,6 +232,7 @@ final class PipeWireTelephonyClient {
         _generation = event.clientGeneration;
         _replaceGateways(event.clientGeneration, startup.gateways);
         _replaceCalls(event.clientGeneration, startup.calls);
+        _replaceTransports(event.clientGeneration, startup.transports);
         _startupTimer?.cancel();
         _setState(PipeWireTelephonyClientState.ready);
         final completer = _connectCompleter;
@@ -243,6 +247,7 @@ final class PipeWireTelephonyClient {
       } else {
         _applyGatewayEvent(event);
         _applyCallEvent(event);
+        _applyTransportEvent(event);
       }
     } catch (error, stackTrace) {
       _failStartup(_localException(error.toString()), stackTrace);
@@ -401,6 +406,52 @@ final class PipeWireTelephonyClient {
         call.invalidate();
         if (!_callRemoved.isClosed) _callRemoved.add(call);
         if (!_gatewayChanged.isClosed) _gatewayChanged.add(call.gateway);
+    }
+  }
+
+  void _replaceTransports(
+    int clientGeneration,
+    List<PwtTransportProperties> properties,
+  ) {
+    for (final value in properties) {
+      _gateways[value.path]?.replaceTransport(
+        PipeWireTelephonyTransport.internal(
+          clientGeneration,
+          _gateways[value.path]!,
+          value,
+        ),
+      );
+    }
+  }
+
+  void _applyTransportEvent(PwtEvent event) {
+    final properties = event.payload.transport;
+    if (properties == null) return;
+    final gateway = _gateways[properties.path];
+    if (gateway == null) return;
+    switch (event.kind) {
+      case 'transportAdded':
+        gateway.replaceTransport(
+          PipeWireTelephonyTransport.internal(
+            event.clientGeneration,
+            gateway,
+            properties,
+          ),
+        );
+      case 'transportChanged':
+        final transport = gateway.transport;
+        if (transport == null ||
+            transport.incarnation != properties.incarnation) {
+          return;
+        }
+        transport.updateProperties(properties);
+      case 'transportRemoved':
+        final transport = gateway.transport;
+        if (transport == null ||
+            transport.incarnation != properties.incarnation) {
+          return;
+        }
+        gateway.removeTransport();
     }
   }
 
