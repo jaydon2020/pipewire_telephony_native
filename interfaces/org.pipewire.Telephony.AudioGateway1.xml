@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<node>
+  <interface name="org.pipewire.Telephony.AudioGateway1">
+    <method name="Dial">
+      <arg name="number" direction="in" type="s"/>
+    </method>
+    <method name="SwapCalls"/>
+    <method name="ReleaseAndAnswer"/>
+    <method name="ReleaseAndSwap"/>
+    <method name="HoldAndAnswer"/>
+    <method name="HangupAll"/>
+    <method name="CreateMultiparty"/>
+    <method name="SendTones">
+      <arg name="tones" direction="in" type="s"/>
+    </method>
+    <property name="Address" type="s" access="read">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal"
+                  value="const"/>
+    </property>
+    <property name="SpeakerVolume" type="y" access="readwrite"/>
+    <property name="MicrophoneVolume" type="y" access="readwrite"/>
+  </interface>
+</node>
