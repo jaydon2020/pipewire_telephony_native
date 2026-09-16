@@ -3,6 +3,20 @@ project(pipewire_telephony_native_library VERSION 0.0.1 LANGUAGES C CXX)
 
 option(PWT_BUILD_DART_INTEGRATION_TESTS
   "Run Dart tests that load the native shared library" ON)
+option(PWT_REQUIRE_CROSS_COMPILE
+  "Fail unless configured by a cross-compiling toolchain with a sysroot" OFF)
+
+if(PWT_REQUIRE_CROSS_COMPILE)
+  if(NOT CMAKE_CROSSCOMPILING)
+    message(FATAL_ERROR "PWT_REQUIRE_CROSS_COMPILE rejects a host compiler")
+  endif()
+  if(NOT CMAKE_SYSROOT)
+    message(FATAL_ERROR "The target toolchain must define CMAKE_SYSROOT")
+  endif()
+  if(BUILD_TESTING OR PWT_BUILD_DART_INTEGRATION_TESTS)
+    message(FATAL_ERROR "Target binaries must not run during a cross-build")
+  endif()
+endif()
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
