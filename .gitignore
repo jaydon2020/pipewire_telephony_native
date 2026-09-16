@@ -30,4 +30,21 @@ migrate_working_dir/
 .dart_tool/
 .flutter-plugins-dependencies
 /build/
+/build-*/
 /coverage/
+
+# Native/CMake local build artifacts
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+CTestTestfile.cmake
+DartConfiguration.tcl
+Testing/
+*.ninja
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+coverage*.info

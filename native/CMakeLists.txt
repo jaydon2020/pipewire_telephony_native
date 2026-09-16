@@ -16,6 +16,7 @@ set(SDBUSCPP_INSTALL OFF CACHE BOOL "" FORCE)
 add_subdirectory(third_party/sdbus-cpp EXCLUDE_FROM_ALL)
 
 set(PIPEWIRE_TELEPHONY_SOURCES
+  src/dart_api_dl.c
   src/pipewire_telephony_native.c
 )
 

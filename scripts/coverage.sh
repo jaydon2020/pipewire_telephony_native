@@ -1,0 +1,25 @@
+#!/bin/bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BUILD_DIR="${1:-${ROOT_DIR}/build-coverage}"
+
+cmake -S "${ROOT_DIR}/native" -B "${BUILD_DIR}" -GNinja \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DCMAKE_C_FLAGS=--coverage \
+  -DCMAKE_CXX_FLAGS=--coverage \
+  -DCMAKE_EXE_LINKER_FLAGS=--coverage \
+  -DBUILD_TESTING=ON
+cmake --build "${BUILD_DIR}" --parallel
+ctest --test-dir "${BUILD_DIR}" --output-on-failure
+
+if ! find "${BUILD_DIR}" -name '*.gcda' -print -quit | grep -q .; then
+  echo "No coverage data yet; native tests are introduced in later tasks."
+  exit 0
+fi
+
+lcov --capture --directory "${BUILD_DIR}" \
+  --output-file "${BUILD_DIR}/coverage-raw.info"
+lcov --remove "${BUILD_DIR}/coverage-raw.info" '*/third_party/*' '*/test/*' \
+  '/usr/*' --output-file "${BUILD_DIR}/coverage.info"
+lcov --summary "${BUILD_DIR}/coverage.info"

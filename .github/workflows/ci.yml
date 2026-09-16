@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - run: flutter analyze --fatal-infos
+      - run: dart format --output=none --set-exit-if-changed lib example/lib
+
+  native:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install native dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsystemd-dev ninja-build clang clang-format clang-tidy
+      - run: cmake -S native -B build/native -GNinja -DBUILD_TESTING=ON
+      - run: cmake --build build/native --parallel
+      - run: ctest --test-dir build/native --output-on-failure
+      - run: scripts/clang_format.sh check
+      - run: scripts/clang_tidy.sh build/native
+
+  generated-proxies:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install generator dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsystemd-dev libexpat1-dev ninja-build
+      - run: cmake -S native/third_party/sdbus-cpp -B build-codegen -GNinja -DSDBUSCPP_BUILD_CODEGEN=ON -DSDBUSCPP_BUILD_TESTS=OFF -DSDBUSCPP_INSTALL=OFF
+      - run: cmake --build build-codegen --target sdbus-c++-xml2cpp --parallel
+      - run: scripts/generate_proxies.sh
+      - run: git diff --exit-code native/generated
