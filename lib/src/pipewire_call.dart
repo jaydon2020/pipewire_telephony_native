@@ -43,6 +43,26 @@ final class PipeWireCall {
     );
   }
 
+  Future<void> answer() {
+    ensureValid();
+    return gateway._client._command(
+      operation: 'answer',
+      path: objectPath,
+      incarnation: incarnation,
+      interface: 'org.pipewire.Telephony.Call1',
+    );
+  }
+
+  Future<void> hangup() {
+    ensureValid();
+    return gateway._client._command(
+      operation: 'hangup',
+      path: objectPath,
+      incarnation: incarnation,
+      interface: 'org.pipewire.Telephony.Call1',
+    );
+  }
+
   void updateProperties(PwtCallProperties properties) {
     if (isValid && properties.incarnation == incarnation) {
       _properties = properties;

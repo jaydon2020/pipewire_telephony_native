@@ -64,6 +64,16 @@ final class PipeWireAudioGateway {
     );
   }
 
+  Future<void> hangupAll() {
+    ensureValid();
+    return _client._command(
+      operation: 'hangupAll',
+      path: objectPath,
+      incarnation: incarnation,
+      interface: 'org.pipewire.Telephony.AudioGateway1',
+    );
+  }
+
   void updateProperties(PwtGatewayProperties properties) {
     if (_valid && properties.incarnation == incarnation) {
       _properties = properties;

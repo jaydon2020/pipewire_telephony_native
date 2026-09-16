@@ -95,6 +95,9 @@ int main() {
     } else if (command.starts_with("fail-refresh ")) {
       const auto name = command.substr(std::string{"fail-refresh "}.size());
       service.fail_next("GetGatewayProperties", name, "mock refresh failure");
+    } else if (command == "fail-answer") {
+      service.fail_next("Answer", "org.pipewire.Telephony.Error.InvalidState",
+                        "call cannot be answered");
     } else if (command == "quit") {
       break;
     }

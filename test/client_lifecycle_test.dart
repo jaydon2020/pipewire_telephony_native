@@ -387,6 +387,44 @@ void main() {
         await stopMockService(service);
       });
 
+      test('answer and hangup commands do not mutate cached calls', () async {
+        final service = await startMockService();
+        final client = PipeWireTelephonyClient(bus: PipeWireBus.session);
+        await client.connect();
+        final gateway = client.gateways.single;
+        final call = client.calls.single;
+
+        await call.answer();
+        await call.hangup();
+        await gateway.hangupAll();
+        expect(client.calls.single, same(call));
+        expect(gateway.calls.single, same(call));
+        expect(call.rawState, 'incoming');
+
+        service.stdin.writeln('fail-answer');
+        await service.stdin.flush();
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        await expectLater(
+          call.answer(),
+          throwsA(
+            isA<PipeWireTelephonyException>()
+                .having(
+                  (error) => error.name,
+                  'name',
+                  'org.pipewire.Telephony.Error.InvalidState',
+                )
+                .having(
+                  (error) => error.message,
+                  'message',
+                  'call cannot be answered',
+                ),
+          ),
+        );
+
+        await client.close();
+        await stopMockService(service);
+      });
+
       test('missing service has a bounded unavailable result', () async {
         final client = PipeWireTelephonyClient(
           bus: PipeWireBus.session,
