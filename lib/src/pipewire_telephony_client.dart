@@ -11,6 +11,7 @@ import 'ffi/types.dart';
 import 'internal/library_loader.dart';
 
 part 'pipewire_audio_gateway.dart';
+part 'pipewire_call.dart';
 
 final class PipeWireTelephonyClient {
   PipeWireTelephonyClient({
@@ -34,8 +35,12 @@ final class PipeWireTelephonyClient {
   final _gatewayChanged = StreamController<PipeWireAudioGateway>.broadcast(
     sync: true,
   );
+  final _callAdded = StreamController<PipeWireCall>.broadcast(sync: true);
+  final _callRemoved = StreamController<PipeWireCall>.broadcast(sync: true);
+  final _callChanged = StreamController<PipeWireCall>.broadcast(sync: true);
   final _codec = const PwtJsonCodec();
   final _gateways = <String, PipeWireAudioGateway>{};
+  final _calls = <String, PipeWireCall>{};
 
   late final PwtNativeBindings _bindings;
   PipeWireTelephonyClientState _state = PipeWireTelephonyClientState.idle;
@@ -56,6 +61,10 @@ final class PipeWireTelephonyClient {
   Stream<PipeWireAudioGateway> get gatewayAdded => _gatewayAdded.stream;
   Stream<PipeWireAudioGateway> get gatewayRemoved => _gatewayRemoved.stream;
   Stream<PipeWireAudioGateway> get gatewayChanged => _gatewayChanged.stream;
+  List<PipeWireCall> get calls => List.unmodifiable(_calls.values);
+  Stream<PipeWireCall> get callAdded => _callAdded.stream;
+  Stream<PipeWireCall> get callRemoved => _callRemoved.stream;
+  Stream<PipeWireCall> get callChanged => _callChanged.stream;
 
   Future<void> connect() {
     if (_state == PipeWireTelephonyClientState.ready) {
@@ -118,6 +127,9 @@ final class PipeWireTelephonyClient {
     unawaited(_gatewayAdded.close());
     unawaited(_gatewayRemoved.close());
     unawaited(_gatewayChanged.close());
+    unawaited(_callAdded.close());
+    unawaited(_callRemoved.close());
+    unawaited(_callChanged.close());
   }
 
   void _onNativeEvent(Object? message) {
@@ -138,6 +150,7 @@ final class PipeWireTelephonyClient {
           throw const FormatException('ready event has no startup snapshot');
         }
         _replaceGateways(event.clientGeneration, startup.gateways);
+        _replaceCalls(event.clientGeneration, startup.calls);
         _startupTimer?.cancel();
         _setState(PipeWireTelephonyClientState.ready);
         final completer = _connectCompleter;
@@ -151,6 +164,7 @@ final class PipeWireTelephonyClient {
         );
       } else {
         _applyGatewayEvent(event);
+        _applyCallEvent(event);
       }
     } catch (error, stackTrace) {
       _failStartup(_localException(error.toString()), stackTrace);
@@ -223,6 +237,7 @@ final class PipeWireTelephonyClient {
     if (properties == null) return;
     switch (event.kind) {
       case 'gatewayAdded':
+        _removeCallsForGateway(properties.path);
         final previous = _gateways.remove(properties.path);
         previous?.invalidate();
         final gateway = PipeWireAudioGateway.internal(
@@ -243,6 +258,7 @@ final class PipeWireTelephonyClient {
         if (gateway == null || gateway.incarnation != properties.incarnation) {
           return;
         }
+        _removeCallsForGateway(properties.path);
         _gateways.remove(properties.path);
         gateway.invalidate();
         if (!_gatewayRemoved.isClosed) _gatewayRemoved.add(gateway);
@@ -250,11 +266,80 @@ final class PipeWireTelephonyClient {
   }
 
   void _clearGateways({bool notify = true}) {
+    _clearCalls(notify: notify);
     final removed = _gateways.values.toList(growable: false);
     _gateways.clear();
     for (final gateway in removed) {
       gateway.invalidate();
       if (notify && !_gatewayRemoved.isClosed) _gatewayRemoved.add(gateway);
+    }
+  }
+
+  void _replaceCalls(int clientGeneration, List<PwtCallProperties> properties) {
+    _clearCalls(notify: false);
+    for (final value in properties) {
+      final gateway = _gateways[value.gatewayPath];
+      if (gateway == null) continue;
+      final call = PipeWireCall.internal(clientGeneration, gateway, value);
+      _calls[value.path] = call;
+      gateway.addCall(call);
+    }
+  }
+
+  void _applyCallEvent(PwtEvent event) {
+    final properties = event.payload.call;
+    if (properties == null) return;
+    switch (event.kind) {
+      case 'callAdded':
+        final gateway = _gateways[properties.gatewayPath];
+        if (gateway == null) return;
+        final previous = _calls.remove(properties.path);
+        if (previous != null) {
+          previous.gateway.removeCall(previous.objectPath);
+          previous.invalidate();
+        }
+        final call = PipeWireCall.internal(
+          event.clientGeneration,
+          gateway,
+          properties,
+        );
+        _calls[properties.path] = call;
+        gateway.addCall(call);
+        if (!_callAdded.isClosed) _callAdded.add(call);
+      case 'callChanged':
+        final call = _calls[properties.path];
+        if (call == null || call.incarnation != properties.incarnation) return;
+        call.updateProperties(properties);
+        if (!_callChanged.isClosed) _callChanged.add(call);
+      case 'callRemoved':
+        final call = _calls[properties.path];
+        if (call == null || call.incarnation != properties.incarnation) return;
+        _calls.remove(properties.path);
+        call.gateway.removeCall(properties.path);
+        call.invalidate();
+        if (!_callRemoved.isClosed) _callRemoved.add(call);
+    }
+  }
+
+  void _removeCallsForGateway(String gatewayPath, {bool notify = true}) {
+    final removed = _calls.values
+        .where((call) => call.gateway.objectPath == gatewayPath)
+        .toList(growable: false);
+    for (final call in removed) {
+      _calls.remove(call.objectPath);
+      call.gateway.removeCall(call.objectPath);
+      call.invalidate();
+      if (notify && !_callRemoved.isClosed) _callRemoved.add(call);
+    }
+  }
+
+  void _clearCalls({bool notify = true}) {
+    final removed = _calls.values.toList(growable: false);
+    _calls.clear();
+    for (final call in removed) {
+      call.gateway.removeCall(call.objectPath);
+      call.invalidate();
+      if (notify && !_callRemoved.isClosed) _callRemoved.add(call);
     }
   }
 }

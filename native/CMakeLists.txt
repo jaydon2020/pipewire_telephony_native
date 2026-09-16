@@ -24,6 +24,7 @@ target_compile_features(pwt_glaze INTERFACE cxx_std_23)
 
 set(PIPEWIRE_TELEPHONY_CORE_SOURCES
   src/dart_api_dl.c
+  src/call_registry.cpp
   src/client_context.cpp
   src/command_queue.cpp
   src/gateway_registry.cpp

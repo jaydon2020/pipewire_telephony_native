@@ -4,6 +4,7 @@
 #include <optional>
 #include <utility>
 
+#include "call_registry.h"
 #include "object_manager_proxy.h"
 
 namespace pwt {
@@ -60,25 +61,34 @@ private:
 };
 
 GatewayRegistry::GatewayRegistry(sdbus::IConnection &connection,
-                                 EventCallback callback)
-    : callback_(std::move(callback)),
+                                 GatewayEventCallback gateway_callback,
+                                 CallEventCallback call_callback)
+    : connection_(connection), gateway_callback_(std::move(gateway_callback)),
+      call_callback_(std::move(call_callback)),
       proxy_(sdbus::createProxy(connection, sdbus::ServiceName{kService},
                                 sdbus::ObjectPath{kRootPath})),
       manager_(std::make_unique<ObjectManager>(*proxy_, *this)) {}
 
 GatewayRegistry::~GatewayRegistry() = default;
 
-std::vector<GatewayProperties> GatewayRegistry::synchronize() {
+void GatewayRegistry::synchronize() {
   const auto objects = manager_->GetManagedObjects();
   for (const auto &[path, interfaces] : objects) {
     interfaces_added(path, interfaces);
   }
+}
+
+DiscoverySnapshot GatewayRegistry::activate() {
   synchronizing_ = false;
 
-  std::vector<GatewayProperties> snapshot;
-  snapshot.reserve(gateways_.size());
+  DiscoverySnapshot snapshot;
+  snapshot.gateways.reserve(gateways_.size());
   for (const auto &[path, gateway] : gateways_) {
-    snapshot.push_back(gateway);
+    snapshot.gateways.push_back(gateway);
+  }
+  for (auto &[path, registry] : call_registries_) {
+    auto calls = registry->activate();
+    snapshot.calls.insert(snapshot.calls.end(), calls.begin(), calls.end());
   }
   return snapshot;
 }
@@ -86,8 +96,13 @@ std::vector<GatewayProperties> GatewayRegistry::synchronize() {
 void GatewayRegistry::invalidate_all() {
   while (!gateways_.empty()) {
     const auto gateway = gateways_.begin()->second;
+    if (const auto calls = call_registries_.find(gateway.path);
+        calls != call_registries_.end()) {
+      calls->second->invalidate_all();
+      call_registries_.erase(calls);
+    }
     gateways_.erase(gateways_.begin());
-    callback_("gatewayRemoved", gateway);
+    gateway_callback_("gatewayRemoved", gateway);
   }
 }
 
@@ -96,6 +111,13 @@ bool GatewayRegistry::contains(const std::string &path,
   const auto gateway = gateways_.find(path);
   return gateway != gateways_.end() &&
          gateway->second.incarnation == incarnation;
+}
+
+bool GatewayRegistry::contains_call(const std::string &path,
+                                    uint64_t incarnation) const {
+  return std::ranges::any_of(call_registries_, [&](const auto &entry) {
+    return entry.second->contains(path, incarnation);
+  });
 }
 
 void GatewayRegistry::interfaces_added(const sdbus::ObjectPath &object_path,
@@ -121,8 +143,24 @@ void GatewayRegistry::interfaces_added(const sdbus::ObjectPath &object_path,
       .changed = {},
   };
   gateways_.insert_or_assign(path, gateway);
+  std::vector<CallProperties> calls;
+  if (added) {
+    auto registry = std::make_unique<CallRegistry>(
+        connection_, path, next_incarnation_,
+        [this](const std::string &kind, const CallProperties &call) {
+          call_callback_(kind, call);
+        });
+    registry->synchronize();
+    if (!synchronizing_) {
+      calls = registry->activate();
+    }
+    call_registries_.insert_or_assign(path, std::move(registry));
+  }
   if (!synchronizing_) {
-    callback_(added ? "gatewayAdded" : "gatewayChanged", gateway);
+    gateway_callback_(added ? "gatewayAdded" : "gatewayChanged", gateway);
+    for (const auto &call : calls) {
+      call_callback_("callAdded", call);
+    }
   }
 }
 
@@ -137,9 +175,14 @@ void GatewayRegistry::interfaces_removed(
     return;
   }
   const auto removed = gateway->second;
+  if (const auto calls = call_registries_.find(removed.path);
+      calls != call_registries_.end()) {
+    calls->second->invalidate_all();
+    call_registries_.erase(calls);
+  }
   gateways_.erase(gateway);
   if (!synchronizing_) {
-    callback_("gatewayRemoved", removed);
+    gateway_callback_("gatewayRemoved", removed);
   }
 }
 

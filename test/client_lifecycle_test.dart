@@ -40,10 +40,12 @@ void main() {
         final client = PipeWireTelephonyClient(bus: PipeWireBus.session);
         final states = <PipeWireTelephonyClientState>[];
         var gatewayCountAtReady = -1;
+        var callCountAtReady = -1;
         final subscription = client.stateChanged.listen(states.add);
         final readySubscription = client.stateChanged.listen((state) {
           if (state == PipeWireTelephonyClientState.ready) {
             gatewayCountAtReady = client.gateways.length;
+            callCountAtReady = client.calls.length;
           }
         });
 
@@ -54,6 +56,9 @@ void main() {
         expect(client.state, PipeWireTelephonyClientState.ready);
         expect(client.gateways.single.address, 'AA:BB:CC:DD:EE:FF');
         expect(gatewayCountAtReady, 1);
+        expect(client.calls.single.name, 'Ada');
+        expect(client.gateways.single.calls.single, same(client.calls.single));
+        expect(callCountAtReady, 1);
 
         final firstClose = client.close();
         final secondClose = client.close();
@@ -74,15 +79,44 @@ void main() {
         await stopMockService(service);
       });
 
-      test('gateway removal and path reuse replace object identity', () async {
+      test('live call and gateway reuse replace object identity', () async {
         final service = await startMockService();
         final client = PipeWireTelephonyClient(bus: PipeWireBus.session);
         await client.connect();
         final original = client.gateways.single;
+        final originalCall = client.calls.single;
+
+        var callCacheWasEmptyAtRemoval = false;
+        final callRemoved = client.callRemoved.first.then((call) {
+          callCacheWasEmptyAtRemoval =
+              client.calls.isEmpty && original.calls.isEmpty;
+          return call;
+        });
+        service.stdin.writeln('remove-call');
+        await service.stdin.flush();
+        expect(
+          await callRemoved.timeout(const Duration(seconds: 2)),
+          originalCall,
+        );
+        expect(callCacheWasEmptyAtRemoval, isTrue);
+        expect(client.gateways.single, same(original));
+        expect(originalCall.isValid, isFalse);
+
+        final callReadded = client.callAdded.first;
+        service.stdin.writeln('add-call');
+        await service.stdin.flush();
+        final callBeforeParentLoss = await callReadded.timeout(
+          const Duration(seconds: 2),
+        );
+        expect(
+          callBeforeParentLoss.incarnation,
+          greaterThan(originalCall.incarnation),
+        );
 
         var cacheWasEmptyAtRemoval = false;
         final removed = client.gatewayRemoved.first.then((gateway) {
-          cacheWasEmptyAtRemoval = client.gateways.isEmpty;
+          cacheWasEmptyAtRemoval =
+              client.gateways.isEmpty && client.calls.isEmpty;
           return gateway;
         });
         service.stdin.writeln('remove');
@@ -91,6 +125,8 @@ void main() {
         expect(cacheWasEmptyAtRemoval, isTrue);
         expect(original.isValid, isFalse);
         expect(original.ensureValid, throwsStateError);
+        expect(callBeforeParentLoss.isValid, isFalse);
+        expect(callBeforeParentLoss.ensureValid, throwsStateError);
 
         final added = client.gatewayAdded.first;
         service.stdin.writeln('add');
@@ -99,6 +135,21 @@ void main() {
         expect(client.gateways.single, same(replacement));
         expect(replacement, isNot(same(original)));
         expect(replacement.incarnation, greaterThan(original.incarnation));
+
+        final callAdded = client.callAdded.first;
+        service.stdin.writeln('add-call');
+        await service.stdin.flush();
+        final replacementCall = await callAdded.timeout(
+          const Duration(seconds: 2),
+        );
+        expect(client.calls.single, same(replacementCall));
+        expect(replacement.calls.single, same(replacementCall));
+        expect(replacementCall.gateway, same(replacement));
+        expect(replacementCall, isNot(same(callBeforeParentLoss)));
+        expect(
+          replacementCall.incarnation,
+          greaterThan(callBeforeParentLoss.incarnation),
+        );
 
         await client.close();
         await stopMockService(service);
@@ -141,7 +192,8 @@ void main() {
         var cacheWasEmptyAtUnavailable = false;
         final unavailable = client.stateChanged.firstWhere((state) {
           if (state != PipeWireTelephonyClientState.unavailable) return false;
-          cacheWasEmptyAtUnavailable = client.gateways.isEmpty;
+          cacheWasEmptyAtUnavailable =
+              client.gateways.isEmpty && client.calls.isEmpty;
           return true;
         });
         service.kill(ProcessSignal.sigterm);

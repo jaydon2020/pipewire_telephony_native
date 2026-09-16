@@ -151,14 +151,20 @@ void ClientContext::run() {
         *connection_,
         [this](const std::string &kind, const GatewayProperties &gateway) {
           post_gateway(kind, gateway);
+        },
+        [this](const std::string &kind, const CallProperties &call) {
+          post_call(kind, call);
         });
-    auto gateways = gateways_->synchronize();
+    gateways_->synchronize();
+    while (connection_->processPendingEvent()) {
+    }
+    auto snapshot = gateways_->activate();
     if (commands_.stopping()) {
       finish_startup({.ready = false,
                       .errorName = "org.pipewire.Telephony.Error.Cancelled",
                       .errorMessage = "telephony startup was cancelled"});
     } else {
-      post_ready(std::move(gateways));
+      post_ready(std::move(snapshot));
       finish_startup({.ready = true});
       run_event_loop();
     }
@@ -222,11 +228,14 @@ void ClientContext::dispatch_commands() {
     if (!request) {
       continue;
     }
-    const bool current_gateway =
+    const bool current_target =
         gateways_ &&
-        request->target.interface == "org.pipewire.Telephony.AudioGateway1" &&
-        gateways_->contains(request->target.path,
-                            request->target.objectIncarnation);
+        ((request->target.interface == "org.pipewire.Telephony.AudioGateway1" &&
+          gateways_->contains(request->target.path,
+                              request->target.objectIncarnation)) ||
+         (request->target.interface == "org.pipewire.Telephony.Call1" &&
+          gateways_->contains_call(request->target.path,
+                                   request->target.objectIncarnation)));
     Reply reply{
         .version = kProtocolVersion,
         .clientGeneration = generation_,
@@ -235,11 +244,11 @@ void ClientContext::dispatch_commands() {
         .requestId = request->requestId,
         .ok = false,
         .error =
-            current_gateway
+            current_target
                 ? local_error("org.pipewire.Telephony.Error.NotImplemented",
                               "operation is not implemented in this delivery")
                 : local_error("org.pipewire.Telephony.Error.StaleObject",
-                              "target gateway is no longer available")};
+                              "target object is no longer available")};
     reply.error->operation = request->operation;
     reply.error->path = request->target.path;
     post_json(command->resultPort, encode_reply(reply));
@@ -258,15 +267,15 @@ void ClientContext::finish_startup(StartupResult result) {
   startup_changed_.notify_all();
 }
 
-void ClientContext::post_ready(std::vector<GatewayProperties> gateways) {
+void ClientContext::post_ready(DiscoverySnapshot snapshot) {
   Event event{.version = kProtocolVersion,
               .clientGeneration = generation_,
               .sequence = ++sequence_,
               .kind = "startup",
               .payload = {.startup =
                               StartupSnapshot{
-                                  .gateways = std::move(gateways),
-                                  .calls = {},
+                                  .gateways = std::move(snapshot.gateways),
+                                  .calls = std::move(snapshot.calls),
                                   .transports = {},
                               },
                           .lifecycle = Lifecycle{.state = "ready"}}};
@@ -282,6 +291,18 @@ void ClientContext::post_gateway(const std::string &kind,
               .sequence = ++sequence_,
               .kind = kind,
               .payload = {.gateway = gateway}};
+  if (!post_json(event_port_, encode_event(event))) {
+    commands_.request_stop();
+  }
+}
+
+void ClientContext::post_call(const std::string &kind,
+                              const CallProperties &call) {
+  Event event{.version = kProtocolVersion,
+              .clientGeneration = generation_,
+              .sequence = ++sequence_,
+              .kind = kind,
+              .payload = {.call = call}};
   if (!post_json(event_port_, encode_event(event))) {
     commands_.request_stop();
   }

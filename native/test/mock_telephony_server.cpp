@@ -46,6 +46,10 @@ int main() {
       service.add_second_gateway();
     } else if (command == "remove-second") {
       service.remove_second_gateway();
+    } else if (command == "add-call") {
+      service.add_call();
+    } else if (command == "remove-call") {
+      service.remove_call();
     } else if (command == "quit") {
       break;
     }
