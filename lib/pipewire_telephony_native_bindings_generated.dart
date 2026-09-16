@@ -42,16 +42,35 @@ class PipewireTelephonyNativeBindings {
   late final _pwt_initialize_dart_api_dl = _pwt_initialize_dart_api_dlPtr
       .asFunction<int Function(ffi.Pointer<ffi.Void>)>();
 
-  ffi.Pointer<ffi.Void> pwt_client_create(int event_port) {
-    return _pwt_client_create(event_port);
+  ffi.Pointer<ffi.Void> pwt_client_create(
+    int bus,
+    ffi.Pointer<ffi.Uint8> test_bus_address,
+    int test_bus_address_length,
+    int event_port,
+  ) {
+    return _pwt_client_create(
+      bus,
+      test_bus_address,
+      test_bus_address_length,
+      event_port,
+    );
   }
 
   late final _pwt_client_createPtr =
-      _lookup<ffi.NativeFunction<ffi.Pointer<ffi.Void> Function(ffi.Int64)>>(
-        'pwt_client_create',
-      );
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Pointer<ffi.Void> Function(
+            ffi.Int32,
+            ffi.Pointer<ffi.Uint8>,
+            ffi.Uint64,
+            ffi.Int64,
+          )
+        >
+      >('pwt_client_create');
   late final _pwt_client_create = _pwt_client_createPtr
-      .asFunction<ffi.Pointer<ffi.Void> Function(int)>();
+      .asFunction<
+        ffi.Pointer<ffi.Void> Function(int, ffi.Pointer<ffi.Uint8>, int, int)
+      >();
 
   int pwt_client_start(ffi.Pointer<ffi.Void> handle) {
     return _pwt_client_start(handle);
@@ -139,3 +158,7 @@ const int PWT_STATUS_QUEUE_FULL = 4;
 const int PWT_STATUS_PROTOCOL_ERROR = 5;
 
 const int PWT_STATUS_INTERNAL_ERROR = 6;
+
+const int PWT_BUS_SYSTEM = 0;
+
+const int PWT_BUS_SESSION = 1;

@@ -22,10 +22,15 @@ typedef int32_t pwt_status;
 #define PWT_STATUS_PROTOCOL_ERROR 5
 #define PWT_STATUS_INTERNAL_ERROR 6
 
+#define PWT_BUS_SYSTEM 0
+#define PWT_BUS_SESSION 1
+
 PWT_EXPORT uint32_t pwt_abi_version(void);
 PWT_EXPORT pwt_status pwt_initialize_dart_api_dl(void *data);
 
-PWT_EXPORT void *pwt_client_create(int64_t event_port);
+PWT_EXPORT void *pwt_client_create(int32_t bus, const uint8_t *test_bus_address,
+                                   uint64_t test_bus_address_length,
+                                   int64_t event_port);
 PWT_EXPORT pwt_status pwt_client_start(void *handle);
 PWT_EXPORT pwt_status pwt_client_submit(void *handle, const uint8_t *bytes,
                                         uint64_t length, int64_t result_port);

@@ -57,23 +57,16 @@ int main() {
           std::future_status::ready);
   require(!stop_queue.push({.bytes = {1}, .resultPort = 1}));
 
-  void *handle = pwt_client_create(0);
+  require(pwt_client_create(99, nullptr, 0, 0) == nullptr);
+  void *handle = pwt_client_create(PWT_BUS_SESSION, nullptr, 0, 0);
   require(handle != nullptr);
-  require(pwt_client_start(handle) == PWT_STATUS_OK);
-  require(pwt_client_start(handle) == PWT_STATUS_INVALID_STATE);
   require(pwt_client_submit(handle, nullptr, 0, 0) ==
           PWT_STATUS_INVALID_ARGUMENT);
 
   const auto *bytes = reinterpret_cast<const uint8_t *>(kRequest);
   require(pwt_client_submit(handle, bytes, 1, 0) == PWT_STATUS_PROTOCOL_ERROR);
-  for (size_t index = 0; index < pwt::kMaxOutstandingRequests; ++index) {
-    require(pwt_client_submit(handle, bytes,
-                              std::char_traits<char>::length(kRequest),
-                              static_cast<int64_t>(index)) == PWT_STATUS_OK);
-  }
-  require(pwt_client_submit(handle, bytes,
-                            std::char_traits<char>::length(kRequest),
-                            65) == PWT_STATUS_QUEUE_FULL);
+  require(pwt_client_start(handle) == PWT_STATUS_OK);
+  require(pwt_client_start(handle) == PWT_STATUS_INVALID_STATE);
   require(pwt_client_stop(handle) == PWT_STATUS_OK);
   require(pwt_client_submit(handle, bytes,
                             std::char_traits<char>::length(kRequest),

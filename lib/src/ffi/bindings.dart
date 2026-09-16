@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'dart:ffi';
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
@@ -24,16 +26,34 @@ enum PwtNativeStatus {
   );
 }
 
+enum PwtNativeBus {
+  system(PWT_BUS_SYSTEM),
+  session(PWT_BUS_SESSION);
+
+  const PwtNativeBus(this.code);
+
+  final int code;
+}
+
 final class PwtClientHandle {
   PwtClientHandle._(this._pointer);
 
   Pointer<Void> _pointer;
 
   bool get isDestroyed => _pointer == nullptr;
+
+  int takeAddress() {
+    final address = _pointer.address;
+    _pointer = nullptr;
+    return address;
+  }
 }
 
 final class PwtNativeBindings {
-  PwtNativeBindings(DynamicLibrary library)
+  PwtNativeBindings(DynamicLibrary library, {String? libraryPath})
+    : this._(library, libraryPath);
+
+  PwtNativeBindings._(DynamicLibrary library, this._libraryPath)
     : _bindings = PipewireTelephonyNativeBindings(library) {
     if (abiVersion != expectedAbiVersion) {
       throw UnsupportedError(
@@ -45,6 +65,7 @@ final class PwtNativeBindings {
   static const expectedAbiVersion = 1;
 
   final PipewireTelephonyNativeBindings _bindings;
+  final String? _libraryPath;
 
   int get abiVersion => _bindings.pwt_abi_version();
 
@@ -52,8 +73,31 @@ final class PwtNativeBindings {
     _bindings.pwt_initialize_dart_api_dl(NativeApi.initializeApiDLData),
   );
 
-  PwtClientHandle createClient(int eventPort) {
-    final pointer = _bindings.pwt_client_create(eventPort);
+  PwtClientHandle createClient(
+    int eventPort, {
+    required PwtNativeBus bus,
+    String? testBusAddress,
+  }) {
+    final addressBytes = testBusAddress == null
+        ? const <int>[]
+        : utf8.encode(testBusAddress);
+    final address = addressBytes.isEmpty
+        ? nullptr.cast<Uint8>()
+        : calloc<Uint8>(addressBytes.length);
+    if (addressBytes.isNotEmpty) {
+      address.asTypedList(addressBytes.length).setAll(0, addressBytes);
+    }
+    final Pointer<Void> pointer;
+    try {
+      pointer = _bindings.pwt_client_create(
+        bus.code,
+        address,
+        addressBytes.length,
+        eventPort,
+      );
+    } finally {
+      if (address != nullptr) calloc.free(address);
+    }
     if (pointer == nullptr) {
       throw StateError('native client allocation failed');
     }
@@ -95,5 +139,23 @@ final class PwtNativeBindings {
     _bindings.pwt_client_destroy(pointer);
   }
 
+  Future<void> destroyAsync(PwtClientHandle handle) async {
+    final address = handle.takeAddress();
+    if (address == 0) return;
+    final path = _libraryPath;
+    if (path == null) {
+      _bindings.pwt_client_destroy(Pointer<Void>.fromAddress(address));
+      return;
+    }
+    await Isolate.run(() => _destroyClient((path, address)));
+  }
+
   void freeNativeBuffer(Pointer<Void> buffer) => _bindings.pwt_free(buffer);
+}
+
+void _destroyClient((String, int) request) {
+  final bindings = PipewireTelephonyNativeBindings(
+    DynamicLibrary.open(request.$1),
+  );
+  bindings.pwt_client_destroy(Pointer<Void>.fromAddress(request.$2));
 }

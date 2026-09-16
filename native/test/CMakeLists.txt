@@ -41,3 +41,40 @@ add_test(NAME mock_telephony_service
   COMMAND "${DBUS_RUN_SESSION}" -- $<TARGET_FILE:test_mock_telephony_service>
 )
 set_tests_properties(mock_telephony_service PROPERTIES TIMEOUT 15)
+
+add_executable(test_client_connection test_client_connection.cpp)
+target_link_libraries(test_client_connection
+  PRIVATE pipewire_telephony_native_core pwt_test_support pwt_gtest_main
+)
+add_test(NAME client_connection
+  COMMAND "${DBUS_RUN_SESSION}" -- $<TARGET_FILE:test_client_connection>
+)
+set_tests_properties(client_connection PROPERTIES TIMEOUT 15)
+
+if(PWT_BUILD_DART_INTEGRATION_TESTS)
+  add_executable(mock_telephony_server mock_telephony_server.cpp)
+  target_link_libraries(mock_telephony_server PRIVATE pwt_test_support)
+
+  find_program(DART_EXECUTABLE dart REQUIRED)
+  add_test(NAME dart_client_lifecycle
+    COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_dart_client_test.sh"
+      $<TARGET_FILE:pipewire_telephony_native>
+      $<TARGET_FILE:mock_telephony_server>
+      "${CMAKE_CURRENT_SOURCE_DIR}/../../test/client_lifecycle_test.dart"
+  )
+  set_tests_properties(dart_client_lifecycle PROPERTIES
+    TIMEOUT 30
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+  )
+
+  add_test(NAME dart_client_access_denied
+    COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_dart_access_test.sh"
+      "${CMAKE_CURRENT_SOURCE_DIR}/private-bus-deny-telephony.conf"
+      $<TARGET_FILE:pipewire_telephony_native>
+      "${CMAKE_CURRENT_SOURCE_DIR}/../../test/client_access_denied_test.dart"
+  )
+  set_tests_properties(dart_client_access_denied PROPERTIES
+    TIMEOUT 30
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+  )
+endif()

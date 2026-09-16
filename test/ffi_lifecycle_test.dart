@@ -21,7 +21,7 @@ void main() {
     expect(bindings.initializeDartApi(), PwtNativeStatus.ok);
     expect(bindings.initializeDartApi(), PwtNativeStatus.ok);
 
-    final handle = bindings.createClient(0);
+    final handle = bindings.createClient(0, bus: PwtNativeBus.session);
     expect(bindings.start(handle), PwtNativeStatus.ok);
     expect(bindings.start(handle), PwtNativeStatus.invalidState);
     expect(

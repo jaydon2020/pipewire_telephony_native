@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.22)
 project(pipewire_telephony_native_library VERSION 0.0.1 LANGUAGES C CXX)
 
+option(PWT_BUILD_DART_INTEGRATION_TESTS
+  "Run Dart tests that load the native shared library" ON)
+
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -20,6 +23,7 @@ target_include_directories(pwt_glaze INTERFACE third_party/glaze/include)
 target_compile_features(pwt_glaze INTERFACE cxx_std_23)
 
 set(PIPEWIRE_TELEPHONY_CORE_SOURCES
+  src/dart_api_dl.c
   src/client_context.cpp
   src/command_queue.cpp
   src/telephony_codec.cpp
@@ -46,7 +50,6 @@ set_target_properties(pipewire_telephony_native_core PROPERTIES
 )
 
 add_library(pipewire_telephony_native SHARED
-  src/dart_api_dl.c
   src/telephony_bridge.cpp
 )
 

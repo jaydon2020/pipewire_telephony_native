@@ -13,6 +13,8 @@ cmake -S "${ROOT_DIR}/native" -B "${BUILD_DIR}" -GNinja \
   -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
   -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
   -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
+  -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined" \
+  -DPWT_BUILD_DART_INTEGRATION_TESTS=OFF \
   -DBUILD_TESTING=ON
 cmake --build "${BUILD_DIR}" --parallel
 ctest --test-dir "${BUILD_DIR}" --output-on-failure

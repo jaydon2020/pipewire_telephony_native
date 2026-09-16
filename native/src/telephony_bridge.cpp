@@ -75,14 +75,30 @@ pwt_status pwt_initialize_dart_api_dl(void *data) {
   }
 }
 
-void *pwt_client_create(int64_t event_port) {
+void *pwt_client_create(int32_t bus, const uint8_t *test_bus_address,
+                        uint64_t test_bus_address_length, int64_t event_port) {
   try {
-    auto client = std::make_shared<pwt::ClientContext>(event_port);
+    if (bus != PWT_BUS_SYSTEM && bus != PWT_BUS_SESSION)
+      return nullptr;
+    if ((test_bus_address == nullptr && test_bus_address_length != 0) ||
+        test_bus_address_length > 4096) {
+      return nullptr;
+    }
+    std::string address;
+    if (test_bus_address_length != 0) {
+      address.assign(reinterpret_cast<const char *>(test_bus_address),
+                     test_bus_address_length);
+      if (address.find('\0') != std::string::npos)
+        return nullptr;
+    }
+
     auto &clients = registry();
     const std::lock_guard lock(clients.mutex);
     if (clients.next_id == std::numeric_limits<uintptr_t>::max())
       return nullptr;
     const auto token = clients.next_id++;
+    auto client = std::make_shared<pwt::ClientContext>(
+        event_port, token, static_cast<pwt::BusType>(bus), std::move(address));
     clients.clients.emplace(token, std::move(client));
     return handle_of(token);
   } catch (...) {
