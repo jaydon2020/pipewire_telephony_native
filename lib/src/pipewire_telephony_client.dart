@@ -306,6 +306,7 @@ final class PipeWireTelephonyClient {
         _calls[properties.path] = call;
         gateway.addCall(call);
         if (!_callAdded.isClosed) _callAdded.add(call);
+        if (!_gatewayChanged.isClosed) _gatewayChanged.add(gateway);
       case 'callChanged':
         final call = _calls[properties.path];
         if (call == null || call.incarnation != properties.incarnation) return;
@@ -314,10 +315,12 @@ final class PipeWireTelephonyClient {
       case 'callRemoved':
         final call = _calls[properties.path];
         if (call == null || call.incarnation != properties.incarnation) return;
+        call.updateProperties(properties);
         _calls.remove(properties.path);
         call.gateway.removeCall(properties.path);
         call.invalidate();
         if (!_callRemoved.isClosed) _callRemoved.add(call);
+        if (!_gatewayChanged.isClosed) _gatewayChanged.add(call.gateway);
     }
   }
 

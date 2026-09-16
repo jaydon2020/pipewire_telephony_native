@@ -49,16 +49,29 @@ private:
                         const Interfaces &interfaces);
   void interfaces_removed(const sdbus::ObjectPath &path,
                           const std::vector<std::string> &interfaces);
+  void properties_changed(const std::string &path, const std::string &interface,
+                          const Properties &changed,
+                          const std::vector<std::string> &invalidated);
+  void refresh_gateway(const std::string &path, uint64_t incarnation,
+                       uint64_t revision);
+  void replace_gateway_properties(const std::string &path,
+                                  const Properties &properties);
 
   sdbus::IConnection &connection_;
   GatewayEventCallback gateway_callback_;
   CallEventCallback call_callback_;
   std::unique_ptr<sdbus::IProxy> proxy_;
   std::unique_ptr<ObjectManager> manager_;
+  sdbus::Slot properties_subscription_;
   std::map<std::string, GatewayProperties> gateways_;
   std::map<std::string, std::unique_ptr<CallRegistry>> call_registries_;
   uint64_t next_incarnation_{};
+  std::map<std::string, uint64_t> revisions_;
+  std::map<std::string, std::unique_ptr<sdbus::IProxy>> property_proxies_;
+  std::map<std::string, uint64_t> refresh_revisions_;
+  uint64_t next_revision_{};
   bool synchronizing_{true};
+  std::shared_ptr<int> lifetime_{std::make_shared<int>(0)};
 };
 
 } // namespace pwt

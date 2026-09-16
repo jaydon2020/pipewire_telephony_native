@@ -69,6 +69,11 @@ public:
   void set_gateway_state(GatewayState state);
   void set_transport_state(TransportState state);
   void set_call_state(CallState state);
+  void change_gateway_state(GatewayState state,
+                            std::vector<std::string> changed,
+                            std::vector<std::string> invalidated = {});
+  void change_call_state(CallState state, std::vector<std::string> changed,
+                         std::vector<std::string> invalidated = {});
 
 private:
   struct Failure {

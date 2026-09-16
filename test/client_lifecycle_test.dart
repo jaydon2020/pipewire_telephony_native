@@ -155,6 +155,85 @@ void main() {
         await stopMockService(service);
       });
 
+      test(
+        'partial and invalidated properties preserve value semantics',
+        () async {
+          final service = await startMockService();
+          final client = PipeWireTelephonyClient(bus: PipeWireBus.session);
+          await client.connect();
+          final gateway = client.gateways.single;
+          final call = client.calls.single;
+
+          final gatewayChanged = gateway.propertiesChanged.first;
+          final callChanged = call.propertiesChanged.first;
+          service.stdin.writeln('change-properties');
+          await service.stdin.flush();
+          expect(await gatewayChanged, ['SpeakerVolume']);
+          expect(
+            await callChanged,
+            containsAll(['IncomingLine', 'Multiparty', 'State']),
+          );
+          expect(gateway.speakerVolume, 0);
+          expect(gateway.microphoneVolume, 10);
+          expect(call.incomingLine, '');
+          expect(call.multiparty, isFalse);
+          expect(call.rawState, 'future-ringing');
+          expect(call.state, PipeWireCallState.unknown);
+
+          final gatewayValues = <int?>[];
+          final callNames = <String?>[];
+          final refreshed = Completer<void>();
+          void completeWhenRefreshed() {
+            if (gatewayValues.length >= 2 && callNames.length >= 2) {
+              if (!refreshed.isCompleted) refreshed.complete();
+            }
+          }
+
+          final gatewaySubscription = gateway.propertiesChanged.listen((names) {
+            if (names.contains('MicrophoneVolume')) {
+              gatewayValues.add(gateway.microphoneVolume);
+              completeWhenRefreshed();
+            }
+          });
+          final callSubscription = call.propertiesChanged.listen((names) {
+            if (names.contains('Name')) {
+              callNames.add(call.name);
+              completeWhenRefreshed();
+            }
+          });
+          service.stdin.writeln('invalidate-properties');
+          await service.stdin.flush();
+          await refreshed.future.timeout(const Duration(seconds: 2));
+
+          expect(gatewayValues, [null, 0]);
+          expect(callNames, [null, 'Grace']);
+          await gatewaySubscription.cancel();
+          await callSubscription.cancel();
+          await client.close();
+          await stopMockService(service);
+        },
+      );
+
+      test('disconnected state is terminal without a removal signal', () async {
+        final service = await startMockService();
+        final client = PipeWireTelephonyClient(bus: PipeWireBus.session);
+        await client.connect();
+        final call = client.calls.single;
+        final removed = client.callRemoved.first;
+
+        service.stdin.writeln('disconnect-call');
+        await service.stdin.flush();
+        expect(await removed.timeout(const Duration(seconds: 2)), same(call));
+        expect(call.rawState, 'disconnected');
+        expect(call.state, PipeWireCallState.disconnected);
+        expect(call.isValid, isFalse);
+        expect(client.calls, isEmpty);
+        expect(client.gateways.single.calls, isEmpty);
+
+        await client.close();
+        await stopMockService(service);
+      });
+
       test('missing service has a bounded unavailable result', () async {
         final client = PipeWireTelephonyClient(
           bus: PipeWireBus.session,

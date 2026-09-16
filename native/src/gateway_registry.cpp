@@ -13,6 +13,8 @@ namespace {
 constexpr auto kService = "org.pipewire.Telephony";
 constexpr auto kRootPath = "/org/pipewire/Telephony";
 constexpr auto kGatewayInterface = "org.pipewire.Telephony.AudioGateway1";
+constexpr auto kCallInterface = "org.pipewire.Telephony.Call1";
+constexpr auto kPropertiesInterface = "org.freedesktop.DBus.Properties";
 
 template <typename T>
 std::optional<T>
@@ -67,7 +69,20 @@ GatewayRegistry::GatewayRegistry(sdbus::IConnection &connection,
       call_callback_(std::move(call_callback)),
       proxy_(sdbus::createProxy(connection, sdbus::ServiceName{kService},
                                 sdbus::ObjectPath{kRootPath})),
-      manager_(std::make_unique<ObjectManager>(*proxy_, *this)) {}
+      manager_(std::make_unique<ObjectManager>(*proxy_, *this)) {
+  properties_subscription_ = connection_.addMatch(
+      "type='signal',sender='org.pipewire.Telephony',"
+      "interface='org.freedesktop.DBus.Properties',"
+      "member='PropertiesChanged',path_namespace='/org/pipewire/Telephony'",
+      [this](sdbus::Message message) {
+        std::string interface;
+        Properties changed;
+        std::vector<std::string> invalidated;
+        message >> interface >> changed >> invalidated;
+        properties_changed(message.getPath(), interface, changed, invalidated);
+      },
+      sdbus::return_slot);
+}
 
 GatewayRegistry::~GatewayRegistry() = default;
 
@@ -104,6 +119,9 @@ void GatewayRegistry::invalidate_all() {
     gateways_.erase(gateways_.begin());
     gateway_callback_("gatewayRemoved", gateway);
   }
+  refresh_revisions_.clear();
+  property_proxies_.clear();
+  revisions_.clear();
 }
 
 bool GatewayRegistry::contains(const std::string &path,
@@ -118,6 +136,115 @@ bool GatewayRegistry::contains_call(const std::string &path,
   return std::ranges::any_of(call_registries_, [&](const auto &entry) {
     return entry.second->contains(path, incarnation);
   });
+}
+
+void GatewayRegistry::properties_changed(
+    const std::string &path, const std::string &interface,
+    const Properties &changed, const std::vector<std::string> &invalidated) {
+  if (interface == kCallInterface) {
+    for (const auto &[gateway_path, registry] : call_registries_) {
+      if (registry->properties_changed(path, interface, changed, invalidated)) {
+        return;
+      }
+    }
+    return;
+  }
+  const auto found = gateways_.find(path);
+  if (interface != kGatewayInterface || found == gateways_.end()) {
+    return;
+  }
+
+  auto &gateway = found->second;
+  std::vector<std::string> names;
+  const auto apply = [&]<typename T>(const char *name,
+                                     std::optional<T> &target) {
+    if (changed.contains(name)) {
+      target = property<T>(changed, name);
+      names.emplace_back(name);
+    }
+    if (std::ranges::find(invalidated, name) != invalidated.end()) {
+      target.reset();
+      if (std::ranges::find(names, name) == names.end()) {
+        names.emplace_back(name);
+      }
+    }
+  };
+  apply("Address", gateway.address);
+  apply("SpeakerVolume", gateway.speakerVolume);
+  apply("MicrophoneVolume", gateway.microphoneVolume);
+  if (names.empty()) {
+    return;
+  }
+
+  gateway.changed = names;
+  const auto revision = revisions_[path] = ++next_revision_;
+  if (!synchronizing_) {
+    gateway_callback_("gatewayChanged", gateway);
+  }
+  if (!invalidated.empty()) {
+    refresh_gateway(path, gateway.incarnation, revision);
+  }
+}
+
+void GatewayRegistry::refresh_gateway(const std::string &path,
+                                      uint64_t incarnation, uint64_t revision) {
+  refresh_revisions_.insert_or_assign(path, revision);
+  auto &proxy = property_proxies_[path];
+  if (!proxy) {
+    proxy = sdbus::createProxy(connection_, sdbus::ServiceName{kService},
+                               sdbus::ObjectPath{path});
+  }
+  const std::weak_ptr<int> lifetime = lifetime_;
+  proxy->callMethodAsync("GetAll")
+      .onInterface(kPropertiesInterface)
+      .withArguments(std::string{kGatewayInterface})
+      .uponReplyInvoke([lifetime, this, path, incarnation,
+                        revision](std::optional<sdbus::Error> error,
+                                  const Properties &properties) {
+        if (lifetime.expired()) {
+          return;
+        }
+        const auto requested = refresh_revisions_.find(path);
+        if (requested == refresh_revisions_.end() ||
+            requested->second != revision) {
+          return;
+        }
+        refresh_revisions_.erase(requested);
+        const auto gateway = gateways_.find(path);
+        if (error || gateway == gateways_.end() ||
+            gateway->second.incarnation != incarnation) {
+          return;
+        }
+        if (revisions_[path] != revision) {
+          refresh_gateway(path, incarnation, revisions_[path]);
+          return;
+        }
+        replace_gateway_properties(path, properties);
+      });
+}
+
+void GatewayRegistry::replace_gateway_properties(const std::string &path,
+                                                 const Properties &properties) {
+  const auto found = gateways_.find(path);
+  if (found == gateways_.end()) {
+    return;
+  }
+  auto next = found->second;
+  next.changed.clear();
+  next.address = property<std::string>(properties, "Address");
+  next.speakerVolume = property<uint8_t>(properties, "SpeakerVolume");
+  next.microphoneVolume = property<uint8_t>(properties, "MicrophoneVolume");
+  if (next.address != found->second.address)
+    next.changed.emplace_back("Address");
+  if (next.speakerVolume != found->second.speakerVolume)
+    next.changed.emplace_back("SpeakerVolume");
+  if (next.microphoneVolume != found->second.microphoneVolume)
+    next.changed.emplace_back("MicrophoneVolume");
+  revisions_[path] = ++next_revision_;
+  found->second = next;
+  if (!synchronizing_ && !next.changed.empty()) {
+    gateway_callback_("gatewayChanged", next);
+  }
 }
 
 void GatewayRegistry::interfaces_added(const sdbus::ObjectPath &object_path,
@@ -143,6 +270,7 @@ void GatewayRegistry::interfaces_added(const sdbus::ObjectPath &object_path,
       .changed = {},
   };
   gateways_.insert_or_assign(path, gateway);
+  revisions_[path] = ++next_revision_;
   std::vector<CallProperties> calls;
   if (added) {
     auto registry = std::make_unique<CallRegistry>(
@@ -181,6 +309,9 @@ void GatewayRegistry::interfaces_removed(
     call_registries_.erase(calls);
   }
   gateways_.erase(gateway);
+  refresh_revisions_.erase(removed.path);
+  property_proxies_.erase(removed.path);
+  revisions_.erase(removed.path);
   if (!synchronizing_) {
     gateway_callback_("gatewayRemoved", removed);
   }

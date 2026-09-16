@@ -8,6 +8,9 @@ final class PipeWireAudioGateway {
   PwtGatewayProperties _properties;
   bool _valid = true;
   final _calls = <String, PipeWireCall>{};
+  final _propertiesChanged = StreamController<List<String>>.broadcast(
+    sync: true,
+  );
 
   String get objectPath => _properties.path;
   int get incarnation => _properties.incarnation;
@@ -16,10 +19,14 @@ final class PipeWireAudioGateway {
   int? get microphoneVolume => _properties.microphoneVolume;
   bool get isValid => _valid;
   List<PipeWireCall> get calls => List.unmodifiable(_calls.values);
+  Stream<List<String>> get propertiesChanged => _propertiesChanged.stream;
 
   void updateProperties(PwtGatewayProperties properties) {
     if (_valid && properties.incarnation == incarnation) {
       _properties = properties;
+      if (properties.changed.isNotEmpty && !_propertiesChanged.isClosed) {
+        _propertiesChanged.add(List.unmodifiable(properties.changed));
+      }
     }
   }
 
@@ -28,7 +35,9 @@ final class PipeWireAudioGateway {
   void removeCall(String path) => _calls.remove(path);
 
   void invalidate() {
+    if (!_valid) return;
     _valid = false;
+    unawaited(_propertiesChanged.close());
     for (final call in _calls.values) {
       call.invalidate();
     }

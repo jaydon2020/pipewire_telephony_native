@@ -50,6 +50,35 @@ int main() {
       service.add_call();
     } else if (command == "remove-call") {
       service.remove_call();
+    } else if (command == "change-properties") {
+      service.change_gateway_state({.address = "AA:BB:CC:DD:EE:FF",
+                                    .speakerVolume = 0,
+                                    .microphoneVolume = 10},
+                                   {"SpeakerVolume"});
+      service.change_call_state({.lineIdentification = "+123",
+                                 .incomingLine = "",
+                                 .name = "Ada",
+                                 .multiparty = false,
+                                 .state = "future-ringing"},
+                                {"IncomingLine", "Multiparty", "State"});
+    } else if (command == "invalidate-properties") {
+      service.change_gateway_state({.address = "AA:BB:CC:DD:EE:FF",
+                                    .speakerVolume = 0,
+                                    .microphoneVolume = 0},
+                                   {}, {"MicrophoneVolume"});
+      service.change_call_state({.lineIdentification = "+123",
+                                 .incomingLine = "",
+                                 .name = "Grace",
+                                 .multiparty = false,
+                                 .state = "future-ringing"},
+                                {}, {"Name"});
+    } else if (command == "disconnect-call") {
+      service.change_call_state({.lineIdentification = "+123",
+                                 .incomingLine = "",
+                                 .name = "Ada",
+                                 .multiparty = false,
+                                 .state = "disconnected"},
+                                {"State"});
     } else if (command == "quit") {
       break;
     }

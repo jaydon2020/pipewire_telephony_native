@@ -116,4 +116,85 @@ TEST(GatewayRegistry, DiscoversMultipleGatewaysAndRenewsReusedPaths) {
   connection->leaveEventLoop();
 }
 
+TEST(GatewayRegistry, AppliesPartialChangesAndRefreshesInvalidations) {
+  pwt::test::MockTelephonyService service(private_bus_address());
+  service.start();
+  auto connection =
+      sdbus::createSessionBusConnectionWithAddress(private_bus_address());
+
+  std::mutex mutex;
+  std::condition_variable changed;
+  std::vector<pwt::GatewayProperties> gateway_events;
+  std::vector<pwt::CallProperties> call_events;
+  pwt::GatewayRegistry registry(
+      *connection,
+      [&](const std::string &kind, const pwt::GatewayProperties &gateway) {
+        if (kind != "gatewayChanged")
+          return;
+        {
+          const std::lock_guard lock(mutex);
+          gateway_events.push_back(gateway);
+        }
+        changed.notify_all();
+      },
+      [&](const std::string &kind, const pwt::CallProperties &call) {
+        if (kind != "callChanged")
+          return;
+        {
+          const std::lock_guard lock(mutex);
+          call_events.push_back(call);
+        }
+        changed.notify_all();
+      });
+  registry.synchronize();
+  registry.activate();
+  connection->enterEventLoopAsync();
+
+  service.change_gateway_state({.address = "AA:BB:CC:DD:EE:FF",
+                                .speakerVolume = 0,
+                                .microphoneVolume = 10},
+                               {"SpeakerVolume"});
+  service.change_call_state({.lineIdentification = "+123",
+                             .incomingLine = "",
+                             .name = "Ada",
+                             .multiparty = false,
+                             .state = "future-ringing"},
+                            {"IncomingLine", "Multiparty", "State"});
+
+  std::unique_lock lock(mutex);
+  ASSERT_TRUE(changed.wait_for(lock, 2s, [&] {
+    return !gateway_events.empty() && !call_events.empty();
+  }));
+  EXPECT_EQ(gateway_events.front().speakerVolume, 0);
+  EXPECT_EQ(gateway_events.front().microphoneVolume, 10);
+  EXPECT_EQ(gateway_events.front().changed,
+            std::vector<std::string>{"SpeakerVolume"});
+  EXPECT_EQ(call_events.front().incomingLine, "");
+  EXPECT_EQ(call_events.front().multiparty, false);
+  EXPECT_EQ(call_events.front().state, "future-ringing");
+  lock.unlock();
+
+  service.change_gateway_state({.address = "AA:BB:CC:DD:EE:FF",
+                                .speakerVolume = 0,
+                                .microphoneVolume = 0},
+                               {}, {"MicrophoneVolume"});
+  service.change_call_state({.lineIdentification = "+123",
+                             .incomingLine = "",
+                             .name = "Grace",
+                             .multiparty = false,
+                             .state = "future-ringing"},
+                            {}, {"Name"});
+
+  lock.lock();
+  ASSERT_TRUE(changed.wait_for(lock, 2s, [&] {
+    return gateway_events.size() >= 3 && call_events.size() >= 3;
+  }));
+  EXPECT_EQ(gateway_events[1].microphoneVolume, std::nullopt);
+  EXPECT_EQ(gateway_events[2].microphoneVolume, 0);
+  EXPECT_EQ(call_events[1].name, std::nullopt);
+  EXPECT_EQ(call_events[2].name, "Grace");
+  lock.unlock();
+  connection->leaveEventLoop();
+}
+
 } // namespace

@@ -177,6 +177,56 @@ void MockTelephonyService::set_call_state(CallState state) {
             sdbus::PropertyName{"Multiparty"}, sdbus::PropertyName{"State"}});
 }
 
+void MockTelephonyService::change_gateway_state(
+    GatewayState state, std::vector<std::string> changed,
+    std::vector<std::string> invalidated) {
+  Properties properties;
+  for (const auto &name : changed) {
+    if (name == "Address")
+      properties.emplace(name, sdbus::Variant{state.address});
+    if (name == "SpeakerVolume")
+      properties.emplace(name, sdbus::Variant{state.speakerVolume});
+    if (name == "MicrophoneVolume")
+      properties.emplace(name, sdbus::Variant{state.microphoneVolume});
+  }
+  {
+    const std::lock_guard lock(mutex_);
+    gateway_state_ = std::move(state);
+  }
+  if (!gateway_)
+    return;
+  gateway_->emitSignal("PropertiesChanged")
+      .onInterface("org.freedesktop.DBus.Properties")
+      .withArguments(std::string{kGatewayInterface}, properties, invalidated);
+}
+
+void MockTelephonyService::change_call_state(
+    CallState state, std::vector<std::string> changed,
+    std::vector<std::string> invalidated) {
+  Properties properties;
+  for (const auto &name : changed) {
+    if (name == "LineIdentification")
+      properties.emplace(name, sdbus::Variant{state.lineIdentification});
+    if (name == "IncomingLine")
+      properties.emplace(name, sdbus::Variant{state.incomingLine});
+    if (name == "Name")
+      properties.emplace(name, sdbus::Variant{state.name});
+    if (name == "Multiparty")
+      properties.emplace(name, sdbus::Variant{state.multiparty});
+    if (name == "State")
+      properties.emplace(name, sdbus::Variant{state.state});
+  }
+  {
+    const std::lock_guard lock(mutex_);
+    call_state_ = std::move(state);
+  }
+  if (!call_)
+    return;
+  call_->emitSignal("PropertiesChanged")
+      .onInterface("org.freedesktop.DBus.Properties")
+      .withArguments(std::string{kCallInterface}, properties, invalidated);
+}
+
 void MockTelephonyService::invoke(std::string operation, std::string argument) {
   std::optional<Failure> failure;
   {

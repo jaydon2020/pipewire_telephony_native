@@ -8,3 +8,14 @@ enum PipeWireTelephonyClientState {
   closing,
   closed,
 }
+
+enum PipeWireCallState {
+  active,
+  held,
+  dialing,
+  alerting,
+  incoming,
+  waiting,
+  disconnected,
+  unknown,
+}

@@ -8,6 +8,9 @@ final class PipeWireCall {
   final PipeWireAudioGateway gateway;
   PwtCallProperties _properties;
   bool _valid = true;
+  final _propertiesChanged = StreamController<List<String>>.broadcast(
+    sync: true,
+  );
 
   String get objectPath => _properties.path;
   int get incarnation => _properties.incarnation;
@@ -15,16 +18,35 @@ final class PipeWireCall {
   String? get incomingLine => _properties.incomingLine;
   String? get name => _properties.name;
   bool? get multiparty => _properties.multiparty;
-  String? get state => _properties.state;
+  String? get rawState => _properties.state;
+  PipeWireCallState? get state => switch (rawState) {
+    null => null,
+    'active' => PipeWireCallState.active,
+    'held' => PipeWireCallState.held,
+    'dialing' => PipeWireCallState.dialing,
+    'alerting' => PipeWireCallState.alerting,
+    'incoming' => PipeWireCallState.incoming,
+    'waiting' => PipeWireCallState.waiting,
+    'disconnected' => PipeWireCallState.disconnected,
+    _ => PipeWireCallState.unknown,
+  };
   bool get isValid => _valid && gateway.isValid;
+  Stream<List<String>> get propertiesChanged => _propertiesChanged.stream;
 
   void updateProperties(PwtCallProperties properties) {
     if (isValid && properties.incarnation == incarnation) {
       _properties = properties;
+      if (properties.changed.isNotEmpty && !_propertiesChanged.isClosed) {
+        _propertiesChanged.add(List.unmodifiable(properties.changed));
+      }
     }
   }
 
-  void invalidate() => _valid = false;
+  void invalidate() {
+    if (!_valid) return;
+    _valid = false;
+    unawaited(_propertiesChanged.close());
+  }
 
   void ensureValid() {
     if (!isValid) {
