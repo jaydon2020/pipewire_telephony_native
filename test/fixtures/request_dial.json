@@ -1,0 +1,1 @@
+{"version":1,"requestId":42,"operation":"dial","target":{"clientGeneration":7,"objectIncarnation":3,"path":"/org/pipewire/Telephony/ag1","interface":"org.pipewire.Telephony.AudioGateway1"},"arguments":{"text":"+123#","volume":null,"value":null}}

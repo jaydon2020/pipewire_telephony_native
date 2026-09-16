@@ -15,9 +15,14 @@ set(SDBUSCPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(SDBUSCPP_INSTALL OFF CACHE BOOL "" FORCE)
 add_subdirectory(third_party/sdbus-cpp EXCLUDE_FROM_ALL)
 
+add_library(pwt_glaze INTERFACE)
+target_include_directories(pwt_glaze INTERFACE third_party/glaze/include)
+target_compile_features(pwt_glaze INTERFACE cxx_std_23)
+
 set(PIPEWIRE_TELEPHONY_SOURCES
   src/dart_api_dl.c
   src/pipewire_telephony_native.c
+  src/telephony_codec.cpp
 )
 
 add_library(pipewire_telephony_native_core STATIC
@@ -33,7 +38,7 @@ target_compile_definitions(pipewire_telephony_native_core
 )
 
 target_link_libraries(pipewire_telephony_native_core
-  PUBLIC sdbus-c++ pthread
+  PUBLIC sdbus-c++ pwt_glaze pthread
 )
 
 set_target_properties(pipewire_telephony_native_core PROPERTIES
@@ -53,7 +58,7 @@ target_compile_definitions(pipewire_telephony_native
 )
 
 target_link_libraries(pipewire_telephony_native
-  PRIVATE sdbus-c++ pthread
+  PRIVATE sdbus-c++ pwt_glaze pthread
 )
 
 set_target_properties(pipewire_telephony_native PROPERTIES

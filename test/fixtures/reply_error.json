@@ -1,0 +1,1 @@
+{"version":1,"clientGeneration":7,"sequence":8,"kind":"reply","requestId":42,"ok":false,"error":{"category":"dbus","name":"org.pipewire.Telephony.Error.InvalidState","message":"The current state does not allow this method call","operation":"dial","path":"/org/pipewire/Telephony/ag1"}}
