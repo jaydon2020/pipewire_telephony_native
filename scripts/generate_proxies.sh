@@ -27,11 +27,11 @@ find_xml2cpp() {
 }
 
 XML2CPP="$(find_xml2cpp)"
-mkdir -p "${ROOT_DIR}/native/generated"
+cd "${ROOT_DIR}"
+mkdir -p native/generated
 
 generate() {
-  "${XML2CPP}" --proxy="${ROOT_DIR}/native/generated/$1" \
-    "${ROOT_DIR}/interfaces/$2"
+  "${XML2CPP}" --proxy="native/generated/$1" "interfaces/$2"
 }
 
 generate object_manager_proxy.h org.freedesktop.DBus.ObjectManager.xml
