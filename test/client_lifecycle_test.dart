@@ -743,6 +743,24 @@ void main() {
         await stopMockService(service);
       });
 
+      test('multiple clients coexist against one service', () async {
+        final service = await startMockService();
+        final first = PipeWireTelephonyClient(bus: PipeWireBus.session);
+        final second = PipeWireTelephonyClient(bus: PipeWireBus.session);
+        try {
+          await Future.wait([first.connect(), second.connect()]);
+          expect(first.gateways.single.address, 'AA:BB:CC:DD:EE:FF');
+          expect(second.gateways.single.address, 'AA:BB:CC:DD:EE:FF');
+          await Future.wait([
+            first.gateways.single.refresh(),
+            second.gateways.single.transport!.refresh(),
+          ]);
+        } finally {
+          await Future.wait([first.close(), second.close()]);
+          await stopMockService(service);
+        }
+      });
+
       test(
         'bus failure terminates the client without stranding close',
         () async {
