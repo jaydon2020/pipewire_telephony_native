@@ -78,6 +78,29 @@ int main() {
           R"({"version":1,"requestId":1,"operation":"dial","target":{"clientGeneration":1,"objectIncarnation":1,"path":"/x","interface":"x","future":true},"arguments":{"text":"1","volume":null,"value":null},"future":true})",
           error)
           .has_value());
+  require(!pwt::decode_request(
+      R"({"version":1,"requestId":1,"operation":"dial","target":{"clientGeneration":1,"objectIncarnation":1,"path":"/x","interface":"x"},"arguments":{"text":"","volume":null,"value":null}})",
+      error));
+  require(!pwt::decode_request(
+      R"({"version":1,"requestId":1,"operation":"dial","target":{"clientGeneration":1,"objectIncarnation":1,"path":"/x","interface":"x"},"arguments":{"text":"12 3","volume":null,"value":null}})",
+      error));
+  require(!pwt::decode_request(
+      R"({"version":1,"requestId":1,"operation":"dial","target":{"clientGeneration":1,"objectIncarnation":1,"path":"/x","interface":"x"},"arguments":{"text":"1\u00002","volume":null,"value":null}})",
+      error));
+  require(
+      pwt::decode_request(
+          R"({"version":1,"requestId":1,"operation":"sendTones","target":{"clientGeneration":1,"objectIncarnation":1,"path":"/x","interface":"x"},"arguments":{"text":"","volume":null,"value":null}})",
+          error)
+          .has_value());
+  require(!pwt::decode_request(
+      R"({"version":1,"requestId":1,"operation":"sendTones","target":{"clientGeneration":1,"objectIncarnation":1,"path":"/x","interface":"x"},"arguments":{"text":"+","volume":null,"value":null}})",
+      error));
+  const auto long_dial = std::string(81, '1');
+  require(!pwt::decode_request(
+      std::string{
+          R"({"version":1,"requestId":1,"operation":"dial","target":{"clientGeneration":1,"objectIncarnation":1,"path":"/x","interface":"x"},"arguments":{"text":")"} +
+          long_dial + R"(","volume":null,"value":null}})",
+      error));
   require(
       !pwt::decode_request(std::string(pwt::kMaxMessageBytes + 1, 'x'), error));
 

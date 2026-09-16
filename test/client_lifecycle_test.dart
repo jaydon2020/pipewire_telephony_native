@@ -363,6 +363,30 @@ void main() {
         await stopMockService(service);
       });
 
+      test('dial and DTMF enforce their public input contracts', () async {
+        final service = await startMockService();
+        final client = PipeWireTelephonyClient(bus: PipeWireBus.session);
+        await client.connect();
+        final gateway = client.gateways.single;
+        final maxDial = List.filled(80, '1').join();
+        final longDial = List.filled(81, '1').join();
+
+        await gateway.dial('0123456789+*#,ABCD');
+        await gateway.dial(maxDial);
+        await gateway.sendTones('0123456789*#ABCD');
+        await gateway.sendTones('');
+
+        for (final number in ['', longDial, '12 3', 'abc', '1\u00002']) {
+          expect(() => gateway.dial(number), throwsArgumentError);
+        }
+        for (final tones in ['+', ',', 'a', '1\u00002']) {
+          expect(() => gateway.sendTones(tones), throwsArgumentError);
+        }
+
+        await client.close();
+        await stopMockService(service);
+      });
+
       test('missing service has a bounded unavailable result', () async {
         final client = PipeWireTelephonyClient(
           bus: PipeWireBus.session,

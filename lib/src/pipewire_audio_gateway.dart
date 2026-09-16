@@ -36,6 +36,34 @@ final class PipeWireAudioGateway {
     );
   }
 
+  Future<void> dial(String number) {
+    ensureValid();
+    if (number.isEmpty || number.length > 80 || !_validDialText(number)) {
+      throw ArgumentError.value(number, 'number', 'invalid dial string');
+    }
+    return _client._command(
+      operation: 'dial',
+      path: objectPath,
+      incarnation: incarnation,
+      interface: 'org.pipewire.Telephony.AudioGateway1',
+      arguments: PwtRequestArguments(text: number),
+    );
+  }
+
+  Future<void> sendTones(String tones) {
+    ensureValid();
+    if (!_validToneText(tones)) {
+      throw ArgumentError.value(tones, 'tones', 'invalid DTMF string');
+    }
+    return _client._command(
+      operation: 'sendTones',
+      path: objectPath,
+      incarnation: incarnation,
+      interface: 'org.pipewire.Telephony.AudioGateway1',
+      arguments: PwtRequestArguments(text: tones),
+    );
+  }
+
   void updateProperties(PwtGatewayProperties properties) {
     if (_valid && properties.incarnation == incarnation) {
       _properties = properties;
@@ -65,3 +93,22 @@ final class PipeWireAudioGateway {
     }
   }
 }
+
+bool _validDialText(String value) => value.codeUnits.every(
+  (character) => switch (character) {
+    >= 0x30 && <= 0x39 ||
+    0x2b ||
+    0x2a ||
+    0x23 ||
+    0x2c ||
+    >= 0x41 && <= 0x44 => true,
+    _ => false,
+  },
+);
+
+bool _validToneText(String value) => value.codeUnits.every(
+  (character) => switch (character) {
+    >= 0x30 && <= 0x39 || 0x2a || 0x23 || >= 0x41 && <= 0x44 => true,
+    _ => false,
+  },
+);

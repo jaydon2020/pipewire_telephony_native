@@ -30,6 +30,11 @@ bool valid_operation(std::string_view operation) {
   return std::ranges::find(kOperations, operation) != kOperations.end();
 }
 
+bool valid_text(std::string_view value, std::string_view allowed) {
+  return std::ranges::all_of(value,
+                             [allowed](char c) { return allowed.contains(c); });
+}
+
 template <typename T> std::string encode(const T &value) {
   auto json = glz::write_json(value).value_or("");
   if (json.size() > kMaxMessageBytes) {
@@ -67,6 +72,15 @@ std::optional<Request> decode_request(std::string_view json,
     error = "invalid target";
   } else if (!valid_operation(request.operation)) {
     error = "unknown operation";
+  } else if (request.operation == "dial" &&
+             (!request.arguments.text || request.arguments.text->empty() ||
+              request.arguments.text->size() > 80 ||
+              !valid_text(*request.arguments.text, "0123456789+*#,ABCD"))) {
+    error = "invalid dial string";
+  } else if (request.operation == "sendTones" &&
+             (!request.arguments.text ||
+              !valid_text(*request.arguments.text, "0123456789*#ABCD"))) {
+    error = "invalid DTMF string";
   } else {
     return request;
   }
