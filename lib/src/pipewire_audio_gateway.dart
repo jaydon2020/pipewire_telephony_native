@@ -76,6 +76,26 @@ final class PipeWireAudioGateway {
     );
   }
 
+  Future<void> swapCalls() => _gatewayCommand('swapCalls');
+
+  Future<void> releaseAndAnswer() => _gatewayCommand('releaseAndAnswer');
+
+  Future<void> releaseAndSwap() => _gatewayCommand('releaseAndSwap');
+
+  Future<void> holdAndAnswer() => _gatewayCommand('holdAndAnswer');
+
+  Future<void> createMultiparty() => _gatewayCommand('createMultiparty');
+
+  Future<void> _gatewayCommand(String operation) {
+    ensureValid();
+    return _client._command(
+      operation: operation,
+      path: objectPath,
+      incarnation: incarnation,
+      interface: 'org.pipewire.Telephony.AudioGateway1',
+    );
+  }
+
   Future<void> setSpeakerVolume(int volume) => _setVolume(
     operation: 'setSpeakerVolume',
     argumentName: 'volume',

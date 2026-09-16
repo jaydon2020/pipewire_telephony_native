@@ -551,6 +551,48 @@ void main() {
         },
       );
 
+      test('multi-call operations preserve remote capability errors', () async {
+        final service = await startMockService();
+        final client = PipeWireTelephonyClient(bus: PipeWireBus.session);
+        await client.connect();
+        final gateway = client.gateways.single;
+        final operations = <String, Future<void> Function()>{
+          'SwapCalls': gateway.swapCalls,
+          'ReleaseAndAnswer': gateway.releaseAndAnswer,
+          'ReleaseAndSwap': gateway.releaseAndSwap,
+          'HoldAndAnswer': gateway.holdAndAnswer,
+          'CreateMultiparty': gateway.createMultiparty,
+        };
+
+        for (final operation in operations.values) {
+          await operation();
+        }
+        for (final entry in operations.entries) {
+          service.stdin.writeln('fail-multicall ${entry.key}');
+          await service.stdin.flush();
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+          await expectLater(
+            entry.value(),
+            throwsA(
+              isA<PipeWireTelephonyException>()
+                  .having(
+                    (error) => error.name,
+                    'name',
+                    'org.pipewire.Telephony.Error.NotSupported',
+                  )
+                  .having(
+                    (error) => error.message,
+                    'message',
+                    '${entry.key} is unavailable',
+                  ),
+            ),
+          );
+        }
+
+        await client.close();
+        await stopMockService(service);
+      });
+
       test('missing service has a bounded unavailable result', () async {
         final client = PipeWireTelephonyClient(
           bus: PipeWireBus.session,

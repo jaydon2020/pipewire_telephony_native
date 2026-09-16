@@ -111,6 +111,11 @@ int main() {
     } else if (command == "fail-activate") {
       service.fail_next("Activate", "org.pipewire.Telephony.Error.NotSupported",
                         "SCO activation is unavailable");
+    } else if (command.starts_with("fail-multicall ")) {
+      const auto operation =
+          command.substr(std::string{"fail-multicall "}.size());
+      service.fail_next(operation, "org.pipewire.Telephony.Error.NotSupported",
+                        operation + " is unavailable");
     } else if (command == "quit") {
       break;
     }
