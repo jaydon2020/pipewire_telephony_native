@@ -31,6 +31,9 @@ public:
   bool properties_changed(const std::string &path, const std::string &interface,
                           const std::map<std::string, sdbus::Variant> &changed,
                           const std::vector<std::string> &invalidated);
+  bool apply_refresh(const std::string &path, uint64_t incarnation,
+                     const std::map<std::string, sdbus::Variant> &properties);
+  void reconcile();
 
 private:
   class ObjectManager;

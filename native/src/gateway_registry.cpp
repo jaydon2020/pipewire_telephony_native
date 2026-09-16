@@ -138,6 +138,48 @@ bool GatewayRegistry::contains_call(const std::string &path,
   });
 }
 
+std::optional<std::string>
+GatewayRegistry::gateway_path_for_call(const std::string &path,
+                                       uint64_t incarnation) const {
+  for (const auto &[gateway_path, registry] : call_registries_) {
+    if (registry->contains(path, incarnation)) {
+      return gateway_path;
+    }
+  }
+  return std::nullopt;
+}
+
+bool GatewayRegistry::apply_gateway_refresh(const std::string &path,
+                                            uint64_t incarnation,
+                                            const Properties &properties) {
+  if (!contains(path, incarnation)) {
+    return false;
+  }
+  replace_gateway_properties(path, properties);
+  return true;
+}
+
+bool GatewayRegistry::apply_call_refresh(const std::string &path,
+                                         uint64_t incarnation,
+                                         const Properties &properties) {
+  return std::ranges::any_of(call_registries_, [&](const auto &entry) {
+    return entry.second->apply_refresh(path, incarnation, properties);
+  });
+}
+
+void GatewayRegistry::reconcile(const std::string &gateway_path) {
+  const auto gateway = gateways_.find(gateway_path);
+  if (gateway == gateways_.end()) {
+    return;
+  }
+  refresh_gateway(gateway_path, gateway->second.incarnation,
+                  revisions_[gateway_path]);
+  if (const auto calls = call_registries_.find(gateway_path);
+      calls != call_registries_.end()) {
+    calls->second->reconcile();
+  }
+}
+
 void GatewayRegistry::properties_changed(
     const std::string &path, const std::string &interface,
     const Properties &changed, const std::vector<std::string> &invalidated) {

@@ -156,6 +156,21 @@ bool CallRegistry::properties_changed(
   return true;
 }
 
+bool CallRegistry::apply_refresh(const std::string &path, uint64_t incarnation,
+                                 const Properties &properties) {
+  if (!contains(path, incarnation)) {
+    return false;
+  }
+  replace_properties(path, properties);
+  return true;
+}
+
+void CallRegistry::reconcile() {
+  for (const auto &[path, call] : calls_) {
+    refresh(path, call.incarnation, revisions_[path]);
+  }
+}
+
 void CallRegistry::refresh(const std::string &path, uint64_t incarnation,
                            uint64_t revision) {
   refresh_revisions_.insert_or_assign(path, revision);

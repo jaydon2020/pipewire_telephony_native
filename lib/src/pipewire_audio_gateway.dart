@@ -2,8 +2,13 @@ part of 'pipewire_telephony_client.dart';
 
 /// A discovered `org.pipewire.Telephony.AudioGateway1` object.
 final class PipeWireAudioGateway {
-  PipeWireAudioGateway.internal(this.clientGeneration, this._properties);
+  PipeWireAudioGateway.internal(
+    this._client,
+    this.clientGeneration,
+    this._properties,
+  );
 
+  final PipeWireTelephonyClient _client;
   final int clientGeneration;
   PwtGatewayProperties _properties;
   bool _valid = true;
@@ -20,6 +25,16 @@ final class PipeWireAudioGateway {
   bool get isValid => _valid;
   List<PipeWireCall> get calls => List.unmodifiable(_calls.values);
   Stream<List<String>> get propertiesChanged => _propertiesChanged.stream;
+
+  Future<void> refresh() {
+    ensureValid();
+    return _client._command(
+      operation: 'refreshGateway',
+      path: objectPath,
+      incarnation: incarnation,
+      interface: 'org.pipewire.Telephony.AudioGateway1',
+    );
+  }
 
   void updateProperties(PwtGatewayProperties properties) {
     if (_valid && properties.incarnation == incarnation) {

@@ -234,6 +234,135 @@ void main() {
         await stopMockService(service);
       });
 
+      test(
+        'concurrent scoped refreshes share the async command contract',
+        () async {
+          final service = await startMockService();
+          final client = PipeWireTelephonyClient(bus: PipeWireBus.session);
+          await client.connect();
+          final gateway = client.gateways.single;
+          final call = client.calls.single;
+          final gatewayChanged = gateway.propertiesChanged.first;
+          final callChanged = call.propertiesChanged.first;
+
+          service.stdin.writeln('prepare-refresh');
+          await service.stdin.flush();
+          await Future.wait([
+            gateway.refresh(),
+            gateway.refresh(),
+            call.refresh(),
+            call.refresh(),
+          ]);
+          await Future.wait([gatewayChanged, callChanged]);
+
+          expect(gateway.address, '');
+          expect(gateway.speakerVolume, 0);
+          expect(gateway.microphoneVolume, 0);
+          expect(call.lineIdentification, '');
+          expect(call.incomingLine, '');
+          expect(call.name, '');
+          expect(call.multiparty, isFalse);
+          expect(call.rawState, 'future-state');
+          expect(call.state, PipeWireCallState.unknown);
+
+          await client.refresh();
+          await client.close();
+          await stopMockService(service);
+        },
+      );
+
+      test('close completes an in-flight result port exactly once', () async {
+        final service = await startMockService();
+        final client = PipeWireTelephonyClient(bus: PipeWireBus.session);
+        await client.connect();
+        service.stdin.writeln('delay-operations');
+        await service.stdin.flush();
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+
+        final refresh = client.gateways.single.refresh();
+        final failedRefresh = expectLater(
+          refresh,
+          throwsA(
+            isA<PipeWireTelephonyException>().having(
+              (error) => error.name,
+              'name',
+              'org.pipewire.Telephony.Error.Closed',
+            ),
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        await client.close();
+        await failedRefresh;
+        await stopMockService(service);
+      });
+
+      test('refresh preserves exact remote errors', () async {
+        final service = await startMockService();
+        final client = PipeWireTelephonyClient(bus: PipeWireBus.session);
+        await client.connect();
+
+        for (final name in [
+          'org.pipewire.Telephony.Error.InvalidState',
+          'org.pipewire.Telephony.Error.NotSupported',
+          'org.pipewire.Telephony.Error.InProgress',
+          'org.ofono.Error.Cme',
+        ]) {
+          service.stdin.writeln('fail-refresh $name');
+          await service.stdin.flush();
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+          await expectLater(
+            client.gateways.single.refresh(),
+            throwsA(
+              isA<PipeWireTelephonyException>()
+                  .having((error) => error.category, 'category', 'remote')
+                  .having((error) => error.name, 'name', name)
+                  .having(
+                    (error) => error.message,
+                    'message',
+                    'mock refresh failure',
+                  )
+                  .having((error) => error.requestId, 'requestId', isNotNull),
+            ),
+          );
+        }
+
+        await client.close();
+        await stopMockService(service);
+      });
+
+      test('a timed-out result port does not stop the client', () async {
+        final service = await startMockService();
+        final client = PipeWireTelephonyClient(
+          bus: PipeWireBus.session,
+          operationTimeout: const Duration(milliseconds: 50),
+        );
+        await client.connect();
+        service.stdin.writeln('delay-operations');
+        await service.stdin.flush();
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+
+        await expectLater(
+          client.gateways.single.refresh(),
+          throwsA(
+            isA<PipeWireTelephonyException>()
+                .having(
+                  (error) => error.name,
+                  'name',
+                  'org.pipewire.Telephony.Error.Timeout',
+                )
+                .having((error) => error.requestId, 'requestId', isNotNull),
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 550));
+        service.stdin.writeln('clear-operation-delay');
+        await service.stdin.flush();
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        await client.gateways.single.refresh();
+
+        await client.close();
+        await stopMockService(service);
+      });
+
       test('missing service has a bounded unavailable result', () async {
         final client = PipeWireTelephonyClient(
           bus: PipeWireBus.session,

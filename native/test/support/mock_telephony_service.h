@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -65,6 +66,7 @@ public:
 
   std::string unique_owner() const;
   void fail_next(std::string operation, std::string name, std::string message);
+  void set_operation_delay(std::chrono::milliseconds delay);
   std::vector<std::pair<std::string, std::string>> invocations() const;
   void set_gateway_state(GatewayState state);
   void set_transport_state(TransportState state);
@@ -85,6 +87,7 @@ private:
                         std::unique_ptr<sdbus::IObject> &object);
   void register_call();
   void invoke(std::string operation, std::string argument = {});
+  void read_property(std::string operation);
 
   const std::string bus_address_;
   const bool populate_initially_;
@@ -97,6 +100,7 @@ private:
   CallState call_state_;
   std::map<std::string, Failure> failures_;
   std::vector<std::pair<std::string, std::string>> invocations_;
+  std::chrono::milliseconds operation_delay_{};
   std::unique_ptr<sdbus::IConnection> connection_;
   std::unique_ptr<sdbus::IObject> root_;
   std::unique_ptr<sdbus::IObject> gateway_;

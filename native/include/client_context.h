@@ -7,6 +7,8 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <sdbus-c++/sdbus-c++.h>
@@ -48,9 +50,29 @@ public:
 private:
   enum class State { created, running, stopping, stopped };
 
+  struct PendingRequest {
+    uint64_t requestId{};
+    int64_t resultPort{};
+    std::string operation;
+    std::string path;
+    uint64_t incarnation{};
+    std::string gatewayPath;
+    std::chrono::steady_clock::time_point deadline;
+  };
+
   void run();
   void run_event_loop();
   void dispatch_commands();
+  void dispatch_request(const Request &request, int64_t result_port);
+  void complete_request(uint64_t request_id,
+                        std::optional<Error> error = std::nullopt);
+  void complete_refresh(uint64_t request_id,
+                        const std::map<std::string, sdbus::Variant> &properties,
+                        std::optional<sdbus::Error> error);
+  void expire_requests();
+  void fail_pending(const std::string &name, const std::string &message);
+  void post_reply(uint64_t request_id, int64_t result_port,
+                  std::optional<Error> error);
   void finish_startup(StartupResult result);
   void post_ready(DiscoverySnapshot snapshot);
   void post_gateway(const std::string &kind, const GatewayProperties &gateway);
@@ -73,6 +95,10 @@ private:
   std::unique_ptr<GatewayRegistry> gateways_;
   std::string service_owner_;
   uint64_t sequence_{};
+  std::unordered_map<uint64_t, PendingRequest> pending_;
+  std::unordered_set<std::string> busy_gateways_;
+  std::unordered_map<std::string, std::unique_ptr<sdbus::IProxy>>
+      operation_proxies_;
   std::mutex startup_mutex_;
   std::condition_variable startup_changed_;
   bool startup_finished_{};

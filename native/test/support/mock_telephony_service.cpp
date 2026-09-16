@@ -1,6 +1,7 @@
 #include "mock_telephony_service.h"
 
 #include <stdexcept>
+#include <thread>
 #include <utility>
 
 namespace pwt::test {
@@ -139,6 +140,12 @@ void MockTelephonyService::fail_next(std::string operation, std::string name,
       Failure{.name = std::move(name), .message = std::move(message)});
 }
 
+void MockTelephonyService::set_operation_delay(
+    std::chrono::milliseconds delay) {
+  const std::lock_guard lock(mutex_);
+  operation_delay_ = delay;
+}
+
 std::vector<std::pair<std::string, std::string>>
 MockTelephonyService::invocations() const {
   const std::lock_guard lock(mutex_);
@@ -229,6 +236,7 @@ void MockTelephonyService::change_call_state(
 
 void MockTelephonyService::invoke(std::string operation, std::string argument) {
   std::optional<Failure> failure;
+  std::chrono::milliseconds delay;
   {
     const std::lock_guard lock(mutex_);
     invocations_.emplace_back(operation, std::move(argument));
@@ -237,7 +245,27 @@ void MockTelephonyService::invoke(std::string operation, std::string argument) {
       failure = std::move(found->second);
       failures_.erase(found);
     }
+    delay = operation_delay_;
   }
+  std::this_thread::sleep_for(delay);
+  if (failure) {
+    throw sdbus::Error(sdbus::Error::Name{failure->name}, failure->message);
+  }
+}
+
+void MockTelephonyService::read_property(std::string operation) {
+  std::optional<Failure> failure;
+  std::chrono::milliseconds delay;
+  {
+    const std::lock_guard lock(mutex_);
+    if (const auto found = failures_.find(operation);
+        found != failures_.end()) {
+      failure = std::move(found->second);
+      failures_.erase(found);
+    }
+    delay = operation_delay_;
+  }
+  std::this_thread::sleep_for(delay);
   if (failure) {
     throw sdbus::Error(sdbus::Error::Name{failure->name}, failure->message);
   }
@@ -277,6 +305,7 @@ void MockTelephonyService::register_gateway(
               }),
           sdbus::registerProperty("Address")
               .withGetter([this, &state] {
+                read_property("GetGatewayProperties");
                 const std::lock_guard lock(mutex_);
                 return state.address;
               })
@@ -334,6 +363,7 @@ void MockTelephonyService::register_call() {
           sdbus::registerMethod("Hangup").implementedAs(
               [this] { invoke("Hangup"); }),
           sdbus::registerProperty("LineIdentification").withGetter([this] {
+            read_property("GetCallProperties");
             const std::lock_guard lock(mutex_);
             return call_state_.lineIdentification;
           }),

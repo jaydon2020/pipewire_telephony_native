@@ -33,6 +33,16 @@ final class PipeWireCall {
   bool get isValid => _valid && gateway.isValid;
   Stream<List<String>> get propertiesChanged => _propertiesChanged.stream;
 
+  Future<void> refresh() {
+    ensureValid();
+    return gateway._client._command(
+      operation: 'refreshCall',
+      path: objectPath,
+      incarnation: incarnation,
+      interface: 'org.pipewire.Telephony.Call1',
+    );
+  }
+
   void updateProperties(PwtCallProperties properties) {
     if (isValid && properties.incarnation == incarnation) {
       _properties = properties;

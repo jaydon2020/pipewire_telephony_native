@@ -17,6 +17,7 @@ final class PipeWireTelephonyClient {
   PipeWireTelephonyClient({
     this.bus = PipeWireBus.system,
     this.startupTimeout = const Duration(seconds: 30),
+    this.operationTimeout = const Duration(seconds: 30),
   }) {
     final (library, path) = loadPipeWireTelephonyLibrary();
     _bindings = PwtNativeBindings(library, libraryPath: path);
@@ -24,6 +25,7 @@ final class PipeWireTelephonyClient {
 
   final PipeWireBus bus;
   final Duration startupTimeout;
+  final Duration operationTimeout;
   final _stateChanges =
       StreamController<PipeWireTelephonyClientState>.broadcast(sync: true);
   final _gatewayAdded = StreamController<PipeWireAudioGateway>.broadcast(
@@ -52,6 +54,8 @@ final class PipeWireTelephonyClient {
   Future<void>? _closeFuture;
   Future<void>? _nativeRelease;
   Timer? _startupTimer;
+  int _generation = 0;
+  int _nextRequestId = 1;
 
   PipeWireTelephonyClientState get state => _state;
   PipeWireTelephonyException? get lastError => _lastError;
@@ -65,6 +69,79 @@ final class PipeWireTelephonyClient {
   Stream<PipeWireCall> get callAdded => _callAdded.stream;
   Stream<PipeWireCall> get callRemoved => _callRemoved.stream;
   Stream<PipeWireCall> get callChanged => _callChanged.stream;
+
+  Future<void> refresh() async {
+    _ensureReady();
+    await Future.wait([
+      for (final gateway in gateways) gateway.refresh(),
+      for (final call in calls) call.refresh(),
+    ]);
+  }
+
+  Future<void> _command({
+    required String operation,
+    required String path,
+    required int incarnation,
+    required String interface,
+    PwtRequestArguments arguments = const PwtRequestArguments(),
+  }) async {
+    _ensureReady();
+    final handle = _handle;
+    if (handle == null) throw StateError('native client is unavailable');
+    final requestId = _nextRequestId++;
+    final request = PwtRequest(
+      requestId: requestId,
+      operation: operation,
+      target: PwtTargetIdentity(
+        clientGeneration: _generation,
+        objectIncarnation: incarnation,
+        path: path,
+        interface: interface,
+      ),
+      arguments: arguments,
+    );
+    final port = ReceivePort('pipewire_telephony.result.$requestId');
+    try {
+      final status = _bindings.submit(
+        handle,
+        _codec.encodeRequest(request),
+        port.sendPort.nativePort,
+      );
+      if (status != PwtNativeStatus.ok) {
+        throw PipeWireTelephonyException(
+          category: 'local',
+          name: 'org.pipewire.Telephony.Error.Submission',
+          message: 'native command submission failed: $status',
+          operation: operation,
+          path: path,
+          requestId: requestId,
+        );
+      }
+      final message = await port.first.timeout(operationTimeout);
+      if (message is! Uint8List) {
+        throw const FormatException('invalid native reply type');
+      }
+      final reply = _codec.decodeReply(message);
+      if (reply.requestId != requestId ||
+          reply.clientGeneration != _generation) {
+        throw const FormatException('reply identity mismatch');
+      }
+      if (!reply.ok) {
+        throw _exception(reply.error!, requestId: reply.requestId);
+      }
+    } on TimeoutException {
+      throw PipeWireTelephonyException(
+        category: 'local',
+        name: 'org.pipewire.Telephony.Error.Timeout',
+        message: 'operation timed out; remote outcome is unknown',
+        operation: operation,
+        path: path,
+        requestId: requestId,
+      );
+    } finally {
+      port.close();
+    }
+  }
 
   Future<void> connect() {
     if (_state == PipeWireTelephonyClientState.ready) {
@@ -149,6 +226,7 @@ final class PipeWireTelephonyClient {
         if (startup == null) {
           throw const FormatException('ready event has no startup snapshot');
         }
+        _generation = event.clientGeneration;
         _replaceGateways(event.clientGeneration, startup.gateways);
         _replaceCalls(event.clientGeneration, startup.calls);
         _startupTimer?.cancel();
@@ -226,6 +304,7 @@ final class PipeWireTelephonyClient {
     _clearGateways(notify: false);
     for (final value in properties) {
       _gateways[value.path] = PipeWireAudioGateway.internal(
+        this,
         clientGeneration,
         value,
       );
@@ -241,6 +320,7 @@ final class PipeWireTelephonyClient {
         final previous = _gateways.remove(properties.path);
         previous?.invalidate();
         final gateway = PipeWireAudioGateway.internal(
+          this,
           event.clientGeneration,
           properties,
         );
@@ -345,15 +425,22 @@ final class PipeWireTelephonyClient {
       if (notify && !_callRemoved.isClosed) _callRemoved.add(call);
     }
   }
+
+  void _ensureReady() {
+    if (_state != PipeWireTelephonyClientState.ready) {
+      throw StateError('client is not ready');
+    }
+  }
 }
 
-PipeWireTelephonyException _exception(PwtError error) =>
+PipeWireTelephonyException _exception(PwtError error, {int? requestId}) =>
     PipeWireTelephonyException(
       category: error.category,
       name: error.name,
       message: error.message,
       operation: error.operation,
       path: error.path,
+      requestId: requestId,
     );
 
 PipeWireTelephonyException _localException(

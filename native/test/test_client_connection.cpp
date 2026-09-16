@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -14,6 +15,12 @@ using namespace std::chrono_literals;
 
 constexpr auto kRequest =
     R"({"version":1,"requestId":42,"operation":"dial","target":{"clientGeneration":1,"objectIncarnation":1,"path":"/org/pipewire/Telephony/ag1","interface":"org.pipewire.Telephony.AudioGateway1"},"arguments":{"text":"+123#","volume":null,"value":null}})";
+
+std::vector<uint8_t> dial_request(uint64_t request_id) {
+  auto json = std::string{kRequest};
+  json.replace(json.find("42"), 2, std::to_string(request_id));
+  return {json.begin(), json.end()};
+}
 
 std::string private_bus_address() {
   const char *address = std::getenv("DBUS_SESSION_BUS_ADDRESS");
@@ -93,6 +100,41 @@ TEST(ClientConnection, StopIsReservedWhileCommandsAreQueued) {
   EXPECT_EQ(client.stop(), PWT_STATUS_OK);
   EXPECT_TRUE(client.wait_for_shutdown(2s));
   client.join();
+}
+
+TEST(ClientConnection, RejectsASecondMutationForTheSameGateway) {
+  pwt::test::MockTelephonyService service(private_bus_address());
+  service.set_operation_delay(100ms);
+  service.start();
+  pwt::ClientContext client(0, 1, pwt::BusType::session, private_bus_address());
+  ASSERT_EQ(client.start(), PWT_STATUS_OK);
+  ASSERT_TRUE(client.wait_for_startup(2s).ready);
+
+  ASSERT_EQ(client.submit(dial_request(1), 0), PWT_STATUS_OK);
+  ASSERT_EQ(client.submit(dial_request(2), 0), PWT_STATUS_OK);
+  std::this_thread::sleep_for(250ms);
+
+  const auto invocations = service.invocations();
+  ASSERT_EQ(invocations.size(), 1);
+  EXPECT_EQ(invocations.front().first, "Dial");
+  client.stop();
+  client.join();
+}
+
+TEST(ClientConnection, CloseDoesNotWaitForAnInflightRemoteReply) {
+  pwt::test::MockTelephonyService service(private_bus_address());
+  service.set_operation_delay(500ms);
+  service.start();
+  pwt::ClientContext client(0, 1, pwt::BusType::session, private_bus_address());
+  ASSERT_EQ(client.start(), PWT_STATUS_OK);
+  ASSERT_TRUE(client.wait_for_startup(2s).ready);
+  ASSERT_EQ(client.submit(dial_request(1), 0), PWT_STATUS_OK);
+
+  std::this_thread::sleep_for(20ms);
+  const auto started = std::chrono::steady_clock::now();
+  client.stop();
+  client.join();
+  EXPECT_LT(std::chrono::steady_clock::now() - started, 300ms);
 }
 
 } // namespace

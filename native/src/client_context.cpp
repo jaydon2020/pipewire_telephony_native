@@ -1,5 +1,6 @@
 #include "client_context.h"
 
+#include <algorithm>
 #include <cerrno>
 #include <map>
 #include <utility>
@@ -18,6 +19,12 @@ constexpr auto kService = "org.pipewire.Telephony";
 constexpr auto kDbusService = "org.freedesktop.DBus";
 constexpr auto kDbusPath = "/org/freedesktop/DBus";
 constexpr auto kDbusInterface = "org.freedesktop.DBus";
+constexpr auto kPropertiesInterface = "org.freedesktop.DBus.Properties";
+constexpr auto kGatewayInterface = "org.pipewire.Telephony.AudioGateway1";
+constexpr auto kCallInterface = "org.pipewire.Telephony.Call1";
+constexpr auto kTransportInterface =
+    "org.pipewire.Telephony.AudioGatewayTransport1";
+constexpr auto kOperationTimeout = std::chrono::seconds{30};
 
 Error local_error(std::string name, std::string message) {
   return {.category = "connection",
@@ -129,6 +136,8 @@ void ClientContext::run() {
           if (current == service_owner_) {
             return;
           }
+          fail_pending("org.pipewire.Telephony.Error.ServiceChanged",
+                       "telephony service owner changed");
           if (gateways_) {
             gateways_->invalidate_all();
           }
@@ -180,8 +189,11 @@ void ClientContext::run() {
         {.ready = false, .errorName = name, .errorMessage = error.what()});
   }
 
+  fail_pending("org.pipewire.Telephony.Error.Closed",
+               "telephony client is closing");
   owner_subscription_.reset();
   gateways_.reset();
+  operation_proxies_.clear();
   connection_.reset();
   {
     const std::lock_guard lock(state_mutex_);
@@ -193,12 +205,16 @@ void ClientContext::run() {
 void ClientContext::run_event_loop() {
   while (!commands_.stopping()) {
     const auto bus = connection_->getEventLoopPollData();
+    auto timeout = bus.getPollTimeout();
+    if (!pending_.empty() && (timeout < 0 || timeout > 100)) {
+      timeout = 100;
+    }
     pollfd descriptors[]{
         {.fd = bus.fd, .events = bus.events, .revents = 0},
         {.fd = bus.eventFd, .events = POLLIN, .revents = 0},
         {.fd = commands_.fd(), .events = POLLIN, .revents = 0},
     };
-    const int result = poll(descriptors, 3, bus.getPollTimeout());
+    const int result = poll(descriptors, 3, timeout);
     if (result < 0) {
       if (errno == EINTR) {
         continue;
@@ -215,6 +231,7 @@ void ClientContext::run_event_loop() {
     }
     while (connection_->processPendingEvent()) {
     }
+    expire_requests();
   }
 }
 
@@ -228,31 +245,272 @@ void ClientContext::dispatch_commands() {
     if (!request) {
       continue;
     }
-    const bool current_target =
-        gateways_ &&
-        ((request->target.interface == "org.pipewire.Telephony.AudioGateway1" &&
-          gateways_->contains(request->target.path,
-                              request->target.objectIncarnation)) ||
-         (request->target.interface == "org.pipewire.Telephony.Call1" &&
-          gateways_->contains_call(request->target.path,
-                                   request->target.objectIncarnation)));
-    Reply reply{
-        .version = kProtocolVersion,
-        .clientGeneration = generation_,
-        .sequence = ++sequence_,
-        .kind = "reply",
-        .requestId = request->requestId,
-        .ok = false,
-        .error =
-            current_target
-                ? local_error("org.pipewire.Telephony.Error.NotImplemented",
-                              "operation is not implemented in this delivery")
-                : local_error("org.pipewire.Telephony.Error.StaleObject",
-                              "target object is no longer available")};
-    reply.error->operation = request->operation;
-    reply.error->path = request->target.path;
-    post_json(command->resultPort, encode_reply(reply));
+    dispatch_request(*request, command->resultPort);
   }
+}
+
+void ClientContext::dispatch_request(const Request &request,
+                                     int64_t result_port) {
+  auto reject = [&](std::string name, std::string message) {
+    auto error = local_error(std::move(name), std::move(message));
+    error.operation = request.operation;
+    error.path = request.target.path;
+    post_reply(request.requestId, result_port, std::move(error));
+  };
+  if (request.target.clientGeneration != generation_) {
+    reject("org.pipewire.Telephony.Error.StaleClient",
+           "target belongs to another client generation");
+    return;
+  }
+  if (pending_.contains(request.requestId)) {
+    reject("org.pipewire.Telephony.Error.DuplicateRequest",
+           "request ID is already pending");
+    return;
+  }
+
+  std::optional<std::string> gateway_path;
+  if (request.target.interface == kGatewayInterface && gateways_ &&
+      gateways_->contains(request.target.path,
+                          request.target.objectIncarnation)) {
+    gateway_path = request.target.path;
+  } else if (request.target.interface == kCallInterface && gateways_) {
+    gateway_path = gateways_->gateway_path_for_call(
+        request.target.path, request.target.objectIncarnation);
+  }
+  if (!gateway_path) {
+    reject("org.pipewire.Telephony.Error.StaleObject",
+           "target object is no longer available");
+    return;
+  }
+
+  const bool refresh = request.operation == "refreshGateway" ||
+                       request.operation == "refreshCall";
+  const bool call_operation = request.operation == "refreshCall" ||
+                              request.operation == "answer" ||
+                              request.operation == "hangup";
+  if ((call_operation && request.target.interface != kCallInterface) ||
+      (!call_operation && request.target.interface != kGatewayInterface)) {
+    reject("org.pipewire.Telephony.Error.InvalidArguments",
+           "operation does not match target interface");
+    return;
+  }
+  if (!refresh && busy_gateways_.contains(*gateway_path)) {
+    reject("org.pipewire.Telephony.Error.Busy",
+           "another mutation is pending for this gateway");
+    return;
+  }
+
+  auto &proxy = operation_proxies_[request.target.path];
+  if (!proxy) {
+    proxy = sdbus::createProxy(*connection_, sdbus::ServiceName{kService},
+                               sdbus::ObjectPath{request.target.path});
+  }
+  pending_.emplace(
+      request.requestId,
+      PendingRequest{.requestId = request.requestId,
+                     .resultPort = result_port,
+                     .operation = request.operation,
+                     .path = request.target.path,
+                     .incarnation = request.target.objectIncarnation,
+                     .gatewayPath = refresh ? std::string{} : *gateway_path,
+                     .deadline =
+                         std::chrono::steady_clock::now() + kOperationTimeout});
+  if (!refresh) {
+    busy_gateways_.insert(*gateway_path);
+  }
+
+  try {
+    auto &target = *proxy;
+    if (refresh) {
+      const auto interface = request.operation == "refreshGateway"
+                                 ? kGatewayInterface
+                                 : kCallInterface;
+      target.callMethodAsync("GetAll")
+          .onInterface(kPropertiesInterface)
+          .withArguments(std::string{interface})
+          .uponReplyInvoke(
+              [this, id = request.requestId](
+                  std::optional<sdbus::Error> error,
+                  const std::map<std::string, sdbus::Variant> &properties) {
+                complete_refresh(id, properties, std::move(error));
+              });
+      return;
+    }
+
+    const auto complete =
+        [this, id = request.requestId](std::optional<sdbus::Error> error) {
+          if (!error) {
+            complete_request(id);
+            return;
+          }
+          const auto pending = pending_.find(id);
+          if (pending == pending_.end()) {
+            return;
+          }
+          complete_request(id, Error{.category = "remote",
+                                     .name = error->getName(),
+                                     .message = error->getMessage(),
+                                     .operation = pending->second.operation,
+                                     .path = pending->second.path});
+        };
+    const auto method = [&](const char *name, const char *interface) {
+      target.callMethodAsync(name).onInterface(interface).uponReplyInvoke(
+          complete);
+    };
+
+    if (request.operation == "dial" || request.operation == "sendTones") {
+      if (!request.arguments.text) {
+        throw std::invalid_argument("text argument is required");
+      }
+      target.callMethodAsync(request.operation == "dial" ? "Dial" : "SendTones")
+          .onInterface(kGatewayInterface)
+          .withArguments(*request.arguments.text)
+          .uponReplyInvoke(complete);
+    } else if (request.operation == "answer") {
+      method("Answer", kCallInterface);
+    } else if (request.operation == "hangup") {
+      method("Hangup", kCallInterface);
+    } else if (request.operation == "hangupAll") {
+      method("HangupAll", kGatewayInterface);
+    } else if (request.operation == "swapCalls") {
+      method("SwapCalls", kGatewayInterface);
+    } else if (request.operation == "releaseAndAnswer") {
+      method("ReleaseAndAnswer", kGatewayInterface);
+    } else if (request.operation == "releaseAndSwap") {
+      method("ReleaseAndSwap", kGatewayInterface);
+    } else if (request.operation == "holdAndAnswer") {
+      method("HoldAndAnswer", kGatewayInterface);
+    } else if (request.operation == "createMultiparty") {
+      method("CreateMultiparty", kGatewayInterface);
+    } else if (request.operation == "setSpeakerVolume" ||
+               request.operation == "setMicrophoneVolume") {
+      if (!request.arguments.volume) {
+        throw std::invalid_argument("volume argument is required");
+      }
+      target.callMethodAsync("Set")
+          .onInterface(kPropertiesInterface)
+          .withArguments(std::string{kGatewayInterface},
+                         request.operation == "setSpeakerVolume"
+                             ? std::string{"SpeakerVolume"}
+                             : std::string{"MicrophoneVolume"},
+                         sdbus::Variant{*request.arguments.volume})
+          .uponReplyInvoke(complete);
+    } else if (request.target.interface == kTransportInterface) {
+      throw std::invalid_argument("transport is not available");
+    } else {
+      throw std::invalid_argument("operation is not implemented");
+    }
+  } catch (const std::exception &error) {
+    auto local = local_error("org.pipewire.Telephony.Error.InvalidArguments",
+                             error.what());
+    local.operation = request.operation;
+    local.path = request.target.path;
+    complete_request(request.requestId, std::move(local));
+  }
+}
+
+void ClientContext::complete_request(uint64_t request_id,
+                                     std::optional<Error> error) {
+  const auto found = pending_.find(request_id);
+  if (found == pending_.end()) {
+    return;
+  }
+  const auto result_port = found->second.resultPort;
+  if (!found->second.gatewayPath.empty()) {
+    busy_gateways_.erase(found->second.gatewayPath);
+  }
+  pending_.erase(found);
+  post_reply(request_id, result_port, std::move(error));
+}
+
+void ClientContext::complete_refresh(
+    uint64_t request_id,
+    const std::map<std::string, sdbus::Variant> &properties,
+    std::optional<sdbus::Error> error) {
+  const auto found = pending_.find(request_id);
+  if (found == pending_.end()) {
+    return;
+  }
+  if (error) {
+    complete_request(request_id, Error{.category = "remote",
+                                       .name = error->getName(),
+                                       .message = error->getMessage(),
+                                       .operation = found->second.operation,
+                                       .path = found->second.path});
+    return;
+  }
+  const auto request = found->second.operation;
+  const auto path = found->second.path;
+  const auto incarnation = found->second.incarnation;
+  bool applied = false;
+  if (request == "refreshGateway") {
+    applied = gateways_->apply_gateway_refresh(path, incarnation, properties);
+  } else if (request == "refreshCall") {
+    applied = gateways_->apply_call_refresh(path, incarnation, properties);
+  }
+  if (!applied) {
+    auto stale = local_error("org.pipewire.Telephony.Error.StaleObject",
+                             "target object disappeared during refresh");
+    stale.operation = request;
+    stale.path = path;
+    complete_request(request_id, std::move(stale));
+    return;
+  }
+  complete_request(request_id);
+}
+
+void ClientContext::expire_requests() {
+  const auto now = std::chrono::steady_clock::now();
+  std::vector<uint64_t> expired;
+  for (const auto &[id, request] : pending_) {
+    if (request.deadline <= now) {
+      expired.push_back(id);
+    }
+  }
+  for (const auto id : expired) {
+    const auto found = pending_.find(id);
+    if (found == pending_.end())
+      continue;
+    const auto gateway_path = found->second.gatewayPath;
+    auto error = local_error("org.pipewire.Telephony.Error.Timeout",
+                             "operation timed out; remote outcome is unknown");
+    error.operation = found->second.operation;
+    error.path = found->second.path;
+    complete_request(id, std::move(error));
+    if (!gateway_path.empty()) {
+      gateways_->reconcile(gateway_path);
+    }
+  }
+}
+
+void ClientContext::fail_pending(const std::string &name,
+                                 const std::string &message) {
+  std::vector<uint64_t> ids;
+  ids.reserve(pending_.size());
+  for (const auto &[id, request] : pending_) {
+    ids.push_back(id);
+  }
+  for (const auto id : ids) {
+    const auto found = pending_.find(id);
+    if (found == pending_.end())
+      continue;
+    auto error = local_error(name, message);
+    error.operation = found->second.operation;
+    error.path = found->second.path;
+    complete_request(id, std::move(error));
+  }
+}
+
+void ClientContext::post_reply(uint64_t request_id, int64_t result_port,
+                               std::optional<Error> error) {
+  Reply reply{.version = kProtocolVersion,
+              .clientGeneration = generation_,
+              .sequence = ++sequence_,
+              .kind = "reply",
+              .requestId = request_id,
+              .ok = !error,
+              .error = std::move(error)};
+  post_json(result_port, encode_reply(reply));
 }
 
 void ClientContext::finish_startup(StartupResult result) {

@@ -79,6 +79,22 @@ int main() {
                                  .multiparty = false,
                                  .state = "disconnected"},
                                 {"State"});
+    } else if (command == "prepare-refresh") {
+      service.change_gateway_state(
+          {.address = "", .speakerVolume = 0, .microphoneVolume = 0}, {});
+      service.change_call_state({.lineIdentification = "",
+                                 .incomingLine = "",
+                                 .name = "",
+                                 .multiparty = false,
+                                 .state = "future-state"},
+                                {});
+    } else if (command == "delay-operations") {
+      service.set_operation_delay(std::chrono::milliseconds{500});
+    } else if (command == "clear-operation-delay") {
+      service.set_operation_delay(std::chrono::milliseconds{0});
+    } else if (command.starts_with("fail-refresh ")) {
+      const auto name = command.substr(std::string{"fail-refresh "}.size());
+      service.fail_next("GetGatewayProperties", name, "mock refresh failure");
     } else if (command == "quit") {
       break;
     }

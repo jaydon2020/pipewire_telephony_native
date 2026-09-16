@@ -39,6 +39,15 @@ public:
   void invalidate_all();
   bool contains(const std::string &path, uint64_t incarnation) const;
   bool contains_call(const std::string &path, uint64_t incarnation) const;
+  std::optional<std::string> gateway_path_for_call(const std::string &path,
+                                                   uint64_t incarnation) const;
+  bool apply_gateway_refresh(
+      const std::string &path, uint64_t incarnation,
+      const std::map<std::string, sdbus::Variant> &properties);
+  bool
+  apply_call_refresh(const std::string &path, uint64_t incarnation,
+                     const std::map<std::string, sdbus::Variant> &properties);
+  void reconcile(const std::string &gateway_path);
 
 private:
   class ObjectManager;
