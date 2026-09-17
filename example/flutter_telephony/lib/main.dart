@@ -6,7 +6,7 @@ import 'package:pipewire_telephony_native/pipewire_telephony_native.dart';
 void main() => runApp(const TelephonyExample());
 
 class TelephonyExample extends StatelessWidget {
-  const TelephonyExample({super.key, this.bus = PipeWireBus.session});
+  const TelephonyExample({super.key, this.bus = PipeWireBus.automatic});
 
   final PipeWireBus bus;
 

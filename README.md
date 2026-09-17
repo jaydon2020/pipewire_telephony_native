@@ -20,8 +20,10 @@ flutter pub get
 
 ## Dart API
 
-The production default is the system bus. Construct a new client to reconnect
-after service loss; an unavailable client is terminal by design.
+The default is `PipeWireBus.automatic`: it checks the current process's session
+bus first and falls back to the system bus when the service is absent or that
+bus is unavailable. Construct a new client to reconnect after service loss; an
+unavailable client is terminal by design.
 
 ```dart
 final client = PipeWireTelephonyClient();
@@ -62,12 +64,20 @@ cd example/flutter_telephony
 flutter run -d linux
 ```
 
-The desktop app uses the user/session bus where WirePlumber's Bluetooth service
-publishes telephony. AGL applications should construct the client with the bus
-used by their image, normally `PipeWireBus.system`. Pairing/trust/profile
+Both examples use automatic discovery. Pass `--session` or `--system` to the
+standalone CLI to force one scope. AGL applications should construct the client
+with the bus used by their image, normally `PipeWireBus.system`, so deployment
+and policy failures remain deterministic. Pairing/trust/profile
 connection remains the BlueZ integration's responsibility. Audio routing,
 focus, and microphone/speaker links remain WirePlumber/AGL policy
 responsibilities.
+
+Automatic discovery only checks buses reachable by the current process. A
+desktop application and its user service normally share the session bus. A
+process started with `sudo` runs under a different user identity and normally
+cannot use the original user's session bus, so it can only discover a
+system-bus service. Administrator privileges do not automatically grant access
+to another user's private session bus.
 
 ## AGL
 

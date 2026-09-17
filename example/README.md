@@ -8,8 +8,8 @@ dart run example/telephony.dart list
 dart run example/telephony.dart watch --seconds 30
 ```
 
-Desktop WirePlumber normally publishes `org.pipewire.Telephony` on the user bus.
-Pass `--system` when the target image publishes it on the system bus.
+The CLI checks the current process's session bus first, then its system bus.
+Pass `--session` or `--system` to select one scope explicitly.
 
 Use an object path printed by `list` for commands:
 

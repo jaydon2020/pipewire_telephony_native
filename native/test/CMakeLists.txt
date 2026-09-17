@@ -87,6 +87,17 @@ if(PWT_BUILD_DART_INTEGRATION_TESTS)
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
   )
 
+  add_test(NAME dart_client_auto_bus
+    COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_dart_auto_bus_test.sh"
+      $<TARGET_FILE:pipewire_telephony_native>
+      $<TARGET_FILE:mock_telephony_server>
+      "${CMAKE_CURRENT_SOURCE_DIR}/../../test/client_auto_bus_test.dart"
+  )
+  set_tests_properties(dart_client_auto_bus PROPERTIES
+    TIMEOUT 30
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+  )
+
   find_program(FLUTTER_EXECUTABLE flutter REQUIRED)
   add_test(NAME flutter_example
     COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_flutter_example_test.sh"

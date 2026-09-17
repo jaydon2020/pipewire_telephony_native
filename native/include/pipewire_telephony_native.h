@@ -24,6 +24,7 @@ typedef int32_t pwt_status;
 
 #define PWT_BUS_SYSTEM 0
 #define PWT_BUS_SESSION 1
+#define PWT_BUS_AUTO 2
 
 PWT_EXPORT uint32_t pwt_abi_version(void);
 PWT_EXPORT pwt_status pwt_initialize_dart_api_dl(void *data);

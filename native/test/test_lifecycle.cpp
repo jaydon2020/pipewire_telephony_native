@@ -58,6 +58,9 @@ int main() {
   require(!stop_queue.push({.bytes = {1}, .resultPort = 1}));
 
   require(pwt_client_create(99, nullptr, 0, 0) == nullptr);
+  void *automatic = pwt_client_create(PWT_BUS_AUTO, nullptr, 0, 0);
+  require(automatic != nullptr);
+  pwt_client_destroy(automatic);
   void *handle = pwt_client_create(PWT_BUS_SESSION, nullptr, 0, 0);
   require(handle != nullptr);
   require(pwt_client_submit(handle, nullptr, 0, 0) ==

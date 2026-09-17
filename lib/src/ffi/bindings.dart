@@ -27,6 +27,7 @@ enum PwtNativeStatus {
 }
 
 enum PwtNativeBus {
+  automatic(PWT_BUS_AUTO),
   system(PWT_BUS_SYSTEM),
   session(PWT_BUS_SESSION);
 

@@ -16,7 +16,7 @@ part 'pipewire_telephony_transport.dart';
 
 final class PipeWireTelephonyClient {
   PipeWireTelephonyClient({
-    this.bus = PipeWireBus.system,
+    this.bus = PipeWireBus.automatic,
     this.startupTimeout = const Duration(seconds: 30),
     this.operationTimeout = const Duration(seconds: 30),
   }) {
@@ -170,9 +170,11 @@ final class PipeWireTelephonyClient {
       _eventSubscription = port.listen(_onNativeEvent);
       final handle = _bindings.createClient(
         port.sendPort.nativePort,
-        bus: bus == PipeWireBus.system
-            ? PwtNativeBus.system
-            : PwtNativeBus.session,
+        bus: switch (bus) {
+          PipeWireBus.automatic => PwtNativeBus.automatic,
+          PipeWireBus.system => PwtNativeBus.system,
+          PipeWireBus.session => PwtNativeBus.session,
+        },
       );
       _handle = handle;
       final status = _bindings.start(handle);

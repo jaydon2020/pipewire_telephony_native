@@ -7,9 +7,18 @@ import 'package:pipewire_telephony_native/pipewire_telephony_native.dart';
 
 Future<void> main(List<String> args) async {
   final arguments = [...args];
-  final bus = arguments.remove('--system')
+  final system = arguments.remove('--system');
+  final session = arguments.remove('--session');
+  if (system && session) {
+    stderr.writeln('--system and --session are mutually exclusive');
+    exitCode = 1;
+    return;
+  }
+  final bus = system
       ? PipeWireBus.system
-      : PipeWireBus.session;
+      : session
+      ? PipeWireBus.session
+      : PipeWireBus.automatic;
   if (arguments.isEmpty || arguments.contains('--help')) {
     _printUsage();
     return;
@@ -221,7 +230,9 @@ int _seconds(List<String> args) {
 }
 
 void _printUsage() {
-  print('Usage: dart run example/telephony.dart [--system] <command>');
+  print(
+    'Usage: dart run example/telephony.dart [--system|--session] <command>',
+  );
   print('');
   print('Commands:');
   print('  list');

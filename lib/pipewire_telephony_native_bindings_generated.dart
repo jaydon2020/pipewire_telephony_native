@@ -162,3 +162,5 @@ const int PWT_STATUS_INTERNAL_ERROR = 6;
 const int PWT_BUS_SYSTEM = 0;
 
 const int PWT_BUS_SESSION = 1;
+
+const int PWT_BUS_AUTO = 2;

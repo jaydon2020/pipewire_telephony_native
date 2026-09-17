@@ -78,7 +78,7 @@ pwt_status pwt_initialize_dart_api_dl(void *data) {
 void *pwt_client_create(int32_t bus, const uint8_t *test_bus_address,
                         uint64_t test_bus_address_length, int64_t event_port) {
   try {
-    if (bus != PWT_BUS_SYSTEM && bus != PWT_BUS_SESSION)
+    if (bus != PWT_BUS_SYSTEM && bus != PWT_BUS_SESSION && bus != PWT_BUS_AUTO)
       return nullptr;
     if ((test_bus_address == nullptr && test_bus_address_length != 0) ||
         test_bus_address_length > 4096) {

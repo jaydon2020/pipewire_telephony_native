@@ -118,10 +118,21 @@ void ClientContext::run() {
     if (!test_bus_address_.empty()) {
       connection_ =
           sdbus::createSessionBusConnectionWithAddress(test_bus_address_);
+      service_owner_ = get_service_owner();
+    } else if (bus_ == BusType::automatic) {
+      try {
+        connection_ = sdbus::createSessionBusConnection();
+        service_owner_ = get_service_owner();
+      } catch (const sdbus::Error &) {
+        connection_ = sdbus::createSystemBusConnection();
+        service_owner_ = get_service_owner();
+      }
     } else if (bus_ == BusType::session) {
       connection_ = sdbus::createSessionBusConnection();
+      service_owner_ = get_service_owner();
     } else {
       connection_ = sdbus::createSystemBusConnection();
+      service_owner_ = get_service_owner();
     }
 
     owner_subscription_ = connection_->addMatch(
@@ -148,7 +159,6 @@ void ClientContext::run() {
         },
         sdbus::return_slot);
 
-    service_owner_ = get_service_owner();
     if (service_owner_.empty()) {
       throw std::runtime_error("telephony service has no owner");
     }

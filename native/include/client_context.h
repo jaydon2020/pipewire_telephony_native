@@ -22,7 +22,7 @@ namespace pwt {
 class GatewayRegistry;
 struct DiscoverySnapshot;
 
-enum class BusType : int32_t { system = 0, session = 1 };
+enum class BusType : int32_t { system = 0, session = 1, automatic = 2 };
 
 struct StartupResult {
   bool ready{};
