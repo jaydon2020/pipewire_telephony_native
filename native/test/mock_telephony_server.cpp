@@ -85,6 +85,27 @@ int main() {
                                  .multiparty = false,
                                  .state = "disconnected"},
                                 {"State"});
+    } else if (command == "set-incoming") {
+      service.change_call_state({.lineIdentification = "+123",
+                                 .incomingLine = "mobile",
+                                 .name = "Ada",
+                                 .multiparty = false,
+                                 .state = "incoming"},
+                                {"IncomingLine", "Multiparty", "State"});
+    } else if (command == "set-outgoing") {
+      service.change_call_state({.lineIdentification = "+123",
+                                 .incomingLine = "",
+                                 .name = "Ada",
+                                 .multiparty = false,
+                                 .state = "dialing"},
+                                {"IncomingLine", "Multiparty", "State"});
+    } else if (command == "set-multiparty") {
+      service.change_call_state({.lineIdentification = "+123",
+                                 .incomingLine = "",
+                                 .name = "Ada",
+                                 .multiparty = true,
+                                 .state = "active"},
+                                {"Multiparty", "State"});
     } else if (command == "prepare-refresh") {
       service.change_gateway_state(
           {.address = "", .speakerVolume = 0, .microphoneVolume = 0}, {});

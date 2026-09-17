@@ -86,4 +86,15 @@ if(PWT_BUILD_DART_INTEGRATION_TESTS)
     TIMEOUT 30
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
   )
+
+  find_program(FLUTTER_EXECUTABLE flutter REQUIRED)
+  add_test(NAME flutter_example
+    COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_flutter_example_test.sh"
+      $<TARGET_FILE:pipewire_telephony_native>
+      $<TARGET_FILE:mock_telephony_server>
+  )
+  set_tests_properties(flutter_example PROPERTIES
+    TIMEOUT 45
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../../example"
+  )
 endif()

@@ -1,17 +1,15 @@
-# pipewire_telephony_native_example
+# PipeWire Telephony Exerciser
 
-Demonstrates how to use the pipewire_telephony_native plugin.
+Run the Linux app from this directory:
 
-## Getting Started
+```sh
+flutter run -d linux
+```
 
-This project is a starting point for a Flutter application.
+It connects to `org.pipewire.Telephony` on the system bus. Select a discovered
+phone before issuing call, volume, multi-call, or SCO commands. The reconnect
+action creates a fresh native client after PipeWire telephony service loss.
 
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+The exerciser does not pair phones or configure audio routing. Establish the
+Bluetooth HFP connection through the BlueZ integration and configure SCO/audio
+policy through WirePlumber or the AGL image.

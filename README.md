@@ -1,92 +1,80 @@
-# pipewire_telephony_native
+# PipeWire Telephony Native
 
-A new Flutter FFI plugin project.
+Flutter FFI access to PipeWire's Bluetooth HFP telephony D-Bus API on Linux.
+The package discovers audio gateways, calls, and SCO transports and covers the
+PipeWire 1.6.6 method and property surface through typed Dart objects.
 
-## Getting Started
+## Requirements
 
-This project is a starting point for a Flutter
-[FFI plugin](https://flutter.dev/to/ffi-package),
-a specialized package that includes native code directly invoked with Dart FFI.
+- Linux with `org.pipewire.Telephony` available on D-Bus
+- Flutter/Dart 3.13 or newer
+- CMake 3.22, a C++23 compiler, Ninja or Make, and target `libsystemd`
+- `sdbus-c++` submodule contents and the vendored Glaze headers
 
-## Project structure
+Initialize submodules in a Git checkout before building:
 
-This template uses the following structure:
-
-* `src`: Contains the native source code, and a CmakeFile.txt file for building
-  that source code into a dynamic library.
-
-* `lib`: Contains the Dart code that defines the API of the plugin, and which
-  calls into the native code using `dart:ffi`.
-
-* platform folders (`android`, `ios`, `windows`, etc.): Contains the build files
-  for building and bundling the native code library with the platform application.
-
-## Building and bundling native code
-
-The `pubspec.yaml` specifies FFI plugins as follows:
-
-```yaml
-  plugin:
-    platforms:
-      some_platform:
-        ffiPlugin: true
+```sh
+git submodule update --init --recursive
+flutter pub get
 ```
 
-This configuration invokes the native build for the various target platforms
-and bundles the binaries in Flutter applications using these FFI plugins.
+## Dart API
 
-This can be combined with dartPluginClass, such as when FFI is used for the
-implementation of one platform in a federated plugin:
+The production default is the system bus. Construct a new client to reconnect
+after service loss; an unavailable client is terminal by design.
 
-```yaml
-  plugin:
-    implements: some_other_plugin
-    platforms:
-      some_platform:
-        dartPluginClass: SomeClass
-        ffiPlugin: true
+```dart
+final client = PipeWireTelephonyClient();
+await client.connect();
+
+final phone = client.gateways.first;
+await phone.dial('+60123456789');
+
+final call = phone.calls.first;
+await call.answer();
+await phone.sendTones('12#');
+await call.hangup();
+
+await client.close();
 ```
 
-A plugin can have both FFI and method channels:
+Use `gatewayAdded`, `gatewayRemoved`, `gatewayChanged`, `callAdded`,
+`callRemoved`, `callChanged`, and `stateChanged` to update application state.
+Objects become invalid when their D-Bus interface, parent gateway, or service
+owner disappears. Methods complete from remote D-Bus replies and preserve
+remote error names in `PipeWireTelephonyException`.
 
-```yaml
-  plugin:
-    platforms:
-      some_platform:
-        pluginClass: SomeName
-        ffiPlugin: true
+## Exerciser
+
+The Linux example provides phone selection, call state and controls, dialing,
+DTMF, all multi-call operations, HFP volumes, SCO state, error reporting, and
+explicit reconnect.
+
+```sh
+cd example
+flutter run -d linux
 ```
 
-The native build systems that are invoked by FFI (and method channel) plugins are:
+The app uses the system bus. Pairing/trust/profile connection remains the BlueZ
+integration's responsibility. Audio routing, focus, and microphone/speaker
+links remain WirePlumber/AGL policy responsibilities.
 
-* For Android: Gradle, which invokes the Android NDK for native builds.
-  * See the documentation in android/build.gradle.
-* For iOS and MacOS: Xcode, via CocoaPods.
-  * See the documentation in ios/pipewire_telephony_native.podspec.
-  * See the documentation in macos/pipewire_telephony_native.podspec.
-* For Linux and Windows: CMake.
-  * See the documentation in linux/CMakeLists.txt.
-  * See the documentation in windows/CMakeLists.txt.
+## AGL
 
-## Binding to native code
+Cross-build and prebuilt packaging are documented in
+[`docs/agl_build.md`](docs/agl_build.md). The target image must expose PipeWire
+telephony on the system bus and grant the application user the destination's
+D-Bus policy. Do not run the application as root to bypass missing policy.
 
-To use the native code, bindings in Dart are needed.
-To avoid writing these by hand, they are generated from the header file
-(`src/pipewire_telephony_native.h`) by `package:ffigen`.
-Regenerate the bindings by running `dart run ffigen --config ffigen.yaml`.
+## Verification
 
-## Invoking native code
+```sh
+flutter analyze
+cmake -S native -B build/native -DBUILD_TESTING=ON
+cmake --build build/native
+ctest --test-dir build/native --output-on-failure
+./scripts/verify_host_package.sh
+```
 
-Very short-running native functions can be directly invoked from any isolate.
-For example, see `sum` in `lib/pipewire_telephony_native.dart`.
-
-Longer-running functions should be invoked on a helper isolate to avoid
-dropping frames in Flutter applications.
-For example, see `sumAsync` in `lib/pipewire_telephony_native.dart`.
-
-## Flutter help
-
-For help getting started with Flutter, view our
-[online documentation](https://docs.flutter.dev), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
-
+Native integration tests create a private D-Bus daemon and never issue call
+commands to the production bus.
