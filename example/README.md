@@ -1,16 +1,31 @@
-# PipeWire Telephony Exerciser
+# pipewire_telephony_native examples
 
-Run the Linux app from this directory:
+The standalone Dart example follows the CLI style used by the sibling BlueZ
+packages. Run it from the package root after building the native library:
 
 ```sh
-flutter run -d linux
+dart run example/telephony.dart list
+dart run example/telephony.dart watch --seconds 30
 ```
 
-It connects to `org.pipewire.Telephony` on the user/session bus, matching the
-desktop `wireplumber@bluetooth.service`. Select a discovered phone before
-issuing call, volume, multi-call, or SCO commands. The reconnect action creates
-a fresh native client after PipeWire telephony service loss.
+Desktop WirePlumber normally publishes `org.pipewire.Telephony` on the user bus.
+Pass `--system` when the target image publishes it on the system bus.
 
-The exerciser does not pair phones or configure audio routing. Establish the
-Bluetooth HFP connection through the BlueZ integration and configure SCO/audio
-policy through WirePlumber or the AGL image.
+Use an object path printed by `list` for commands:
+
+```sh
+dart run example/telephony.dart gateway /org/pipewire/Telephony/ag1 props
+dart run example/telephony.dart gateway /org/pipewire/Telephony/ag1 dial +60123456789
+dart run example/telephony.dart gateway /org/pipewire/Telephony/ag1 tones 12#
+dart run example/telephony.dart call /org/pipewire/Telephony/ag1/call1 answer
+```
+
+## Flutter Telephony
+
+The dedicated `flutter_telephony` Linux app provides the full gateway, call,
+multi-call, volume, and SCO interface with live state and explicit reconnect.
+
+```sh
+cd example/flutter_telephony
+flutter run -d linux
+```

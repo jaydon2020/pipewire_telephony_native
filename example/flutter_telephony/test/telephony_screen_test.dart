@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pipewire_telephony_native/pipewire_telephony_native.dart';
-import 'package:pipewire_telephony_native_example/main.dart';
+import 'package:flutter_telephony/main.dart';
 
 Future<Process> _startMockService() async {
   final executable = Platform.environment['PWT_MOCK_SERVER'];

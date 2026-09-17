@@ -1,5 +1,5 @@
-name: pipewire_telephony_native_example
-description: "Demonstrates how to use the pipewire_telephony_native plugin."
+name: flutter_telephony
+description: Full Flutter Linux telephony exerciser using pipewire_telephony_native.
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -37,7 +37,7 @@ dependencies:
     # See https://dart.dev/tools/pub/dependencies#version-constraints
     # The example app is bundled with the plugin so we use a path dependency on
     # the parent directory to use the current plugin's version.
-    path: ../
+    path: ../..
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.

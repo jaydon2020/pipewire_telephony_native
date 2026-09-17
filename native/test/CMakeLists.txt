@@ -95,6 +95,6 @@ if(PWT_BUILD_DART_INTEGRATION_TESTS)
   )
   set_tests_properties(flutter_example PROPERTIES
     TIMEOUT 45
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../../example"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../../example/flutter_telephony"
   )
 endif()

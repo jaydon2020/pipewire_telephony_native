@@ -12,8 +12,8 @@ dart run ffigen --config ffigen.yaml
 git diff --exit-code -- \
   lib/pipewire_telephony_native_bindings_generated.dart native/generated
 
-(cd example && flutter build linux --debug)
-BUNDLE="${ROOT_DIR}/example/build/linux/x64/debug/bundle"
+(cd example/flutter_telephony && flutter build linux --debug)
+BUNDLE="${ROOT_DIR}/example/flutter_telephony/build/linux/x64/debug/bundle"
 LIBRARY="${BUNDLE}/lib/libpipewire_telephony_native.so"
 test -f "${LIBRARY}"
 

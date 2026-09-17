@@ -44,14 +44,21 @@ Objects become invalid when their D-Bus interface, parent gateway, or service
 owner disappears. Methods complete from remote D-Bus replies and preserve
 remote error names in `PipeWireTelephonyException`.
 
-## Exerciser
+## Examples
 
-The Linux example provides phone selection, call state and controls, dialing,
-DTMF, all multi-call operations, HFP volumes, SCO state, error reporting, and
-explicit reconnect.
+The standalone Dart CLI lists and watches telephony objects and exposes every
+command group:
 
 ```sh
-cd example
+dart run example/telephony.dart list
+```
+
+The dedicated Flutter Linux app provides phone selection, call state and
+controls, dialing, DTMF, all multi-call operations, HFP volumes, SCO state,
+error reporting, and explicit reconnect.
+
+```sh
+cd example/flutter_telephony
 flutter run -d linux
 ```
 
