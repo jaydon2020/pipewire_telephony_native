@@ -55,9 +55,12 @@ cd example
 flutter run -d linux
 ```
 
-The app uses the system bus. Pairing/trust/profile connection remains the BlueZ
-integration's responsibility. Audio routing, focus, and microphone/speaker
-links remain WirePlumber/AGL policy responsibilities.
+The desktop app uses the user/session bus where WirePlumber's Bluetooth service
+publishes telephony. AGL applications should construct the client with the bus
+used by their image, normally `PipeWireBus.system`. Pairing/trust/profile
+connection remains the BlueZ integration's responsibility. Audio routing,
+focus, and microphone/speaker links remain WirePlumber/AGL policy
+responsibilities.
 
 ## AGL
 
