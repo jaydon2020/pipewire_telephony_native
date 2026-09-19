@@ -1,3 +1,11 @@
+// DynamicLibrary resolution for libpipewire_telephony_native.so.
+//
+// Search order adapted from https://github.com/jwinarske/bluez_native, which
+// is in turn patterned after
+// https://github.com/meta-flutter/appstream_dart/blob/main/lib/src/bindings.dart.
+// Both upstream projects are licensed under Apache-2.0; see
+// LICENSES/Apache-2.0.txt.
+
 import 'dart:ffi';
 import 'dart:io';
 

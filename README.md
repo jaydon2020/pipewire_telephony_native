@@ -101,3 +101,15 @@ ctest --test-dir build/native --output-on-failure
 
 Native integration tests create a private D-Bus daemon and never issue call
 commands to the production bus.
+
+## Acknowledgements
+
+- [bluez_native](https://github.com/jwinarske/bluez_native) (Apache-2.0): the
+  FFI handle lifetime, Dart codec/type organization, library loader, and
+  development-script patterns are derived from this project.
+- [appstream_dart](https://github.com/meta-flutter/appstream_dart)
+  (Apache-2.0): the original pattern for dynamic-library resolution used by
+  `bluez_native` and this package.
+- [sdbus-c++](https://github.com/Kistler-Group/sdbus-cpp) (LGPL-2.1): the
+  D-Bus C++ binding used by the native library. Its source and license are
+  retained under `native/third_party/sdbus-cpp/`.

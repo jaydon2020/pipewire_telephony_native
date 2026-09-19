@@ -1,3 +1,10 @@
+// JSON codec for the versioned PipeWire telephony FFI protocol.
+//
+// The codec organization is adapted from
+// https://github.com/jwinarske/bluez_native under Apache-2.0; see
+// LICENSES/Apache-2.0.txt. The JSON wire format is specific to this package
+// and is serialized by upstream Glaze on the native side.
+
 import 'dart:convert';
 import 'dart:typed_data';
 
