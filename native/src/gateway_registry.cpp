@@ -82,7 +82,11 @@ GatewayRegistry::GatewayRegistry(sdbus::IConnection &connection,
         std::string interface;
         Properties changed;
         std::vector<std::string> invalidated;
-        message >> interface >> changed >> invalidated;
+        try {
+          message >> interface >> changed >> invalidated;
+        } catch (const sdbus::Error &) {
+          return;
+        }
         properties_changed(message.getPath(), interface, changed, invalidated);
       },
       sdbus::return_slot);

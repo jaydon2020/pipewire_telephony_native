@@ -98,6 +98,19 @@ if(PWT_BUILD_DART_INTEGRATION_TESTS)
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
   )
 
+  find_program(PYTHON3_EXECUTABLE python3 REQUIRED)
+  add_test(NAME dart_signal_interpretation
+    COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_dart_signal_test.sh"
+      $<TARGET_FILE:pipewire_telephony_native>
+      "${PYTHON3_EXECUTABLE}"
+      "${CMAKE_CURRENT_SOURCE_DIR}/simulate_telephony_signals.py"
+      "${CMAKE_CURRENT_SOURCE_DIR}/../../test/client_signal_interpretation_test.dart"
+  )
+  set_tests_properties(dart_signal_interpretation PROPERTIES
+    TIMEOUT 30
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+  )
+
   find_program(FLUTTER_EXECUTABLE flutter REQUIRED)
   add_test(NAME flutter_example
     COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_flutter_example_test.sh"
