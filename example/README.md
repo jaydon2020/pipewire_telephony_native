@@ -1,23 +1,24 @@
 # pipewire_telephony_native examples
 
-The standalone Dart example follows the CLI style used by the sibling BlueZ
-packages. Run it from the package root after building the native library:
+The standalone Dart examples follow the focused, one-interface style used by
+the sibling BlueZ packages. Run them from the package root after building the
+native library:
 
 ```sh
-dart run example/telephony.dart list
-dart run example/telephony.dart watch --seconds 30
+dart run example/telephony_list.dart
+dart run example/telephony_watch.dart --seconds 30
 ```
 
-The CLI checks the current process's session bus first, then its system bus.
+Each example checks the current process's session bus first, then its system bus.
 Pass `--session` or `--system` to select one scope explicitly.
 
 Use an object path printed by `list` for commands:
 
 ```sh
-dart run example/telephony.dart gateway /org/pipewire/Telephony/ag1 props
-dart run example/telephony.dart gateway /org/pipewire/Telephony/ag1 dial +60123456789
-dart run example/telephony.dart gateway /org/pipewire/Telephony/ag1 tones 12#
-dart run example/telephony.dart call /org/pipewire/Telephony/ag1/call1 answer
+dart run example/telephony_gateway.dart /org/pipewire/Telephony/ag1 props
+dart run example/telephony_gateway.dart /org/pipewire/Telephony/ag1 dial +60123456789
+dart run example/telephony_gateway.dart /org/pipewire/Telephony/ag1 tones 12#
+dart run example/telephony_call.dart /org/pipewire/Telephony/ag1/call1 answer
 ```
 
 ## Flutter Telephony

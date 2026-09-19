@@ -48,11 +48,14 @@ remote error names in `PipeWireTelephonyException`.
 
 ## Examples
 
-The standalone Dart CLI lists and watches telephony objects and exposes every
-command group:
+The standalone Dart examples separate discovery, watching, gateway commands and
+call commands:
 
 ```sh
-dart run example/telephony.dart list
+dart run example/telephony_list.dart
+dart run example/telephony_watch.dart --seconds 30
+dart run example/telephony_gateway.dart /org/pipewire/Telephony/ag1 props
+dart run example/telephony_call.dart /org/pipewire/Telephony/ag1/call1 answer
 ```
 
 The dedicated Flutter Linux app provides phone selection, call state and
@@ -64,8 +67,8 @@ cd example/flutter_telephony
 flutter run -d linux
 ```
 
-Both examples use automatic discovery. Pass `--session` or `--system` to the
-standalone CLI to force one scope. AGL applications should construct the client
+All examples use automatic discovery. Pass `--session` or `--system` to a
+standalone example to force one scope. AGL applications should construct the client
 with the bus used by their image, normally `PipeWireBus.system`, so deployment
 and policy failures remain deterministic. Pairing/trust/profile
 connection remains the BlueZ integration's responsibility. Audio routing,
