@@ -31,6 +31,18 @@ class PipewireTelephonyNativeBindings {
   late final _pwt_abi_version = _pwt_abi_versionPtr
       .asFunction<int Function()>();
 
+  /// Absolute loader path borrowed for the native asset's lifetime.
+  ffi.Pointer<ffi.Char> pwt_library_path() {
+    return _pwt_library_path();
+  }
+
+  late final _pwt_library_pathPtr =
+      _lookup<ffi.NativeFunction<ffi.Pointer<ffi.Char> Function()>>(
+        'pwt_library_path',
+      );
+  late final _pwt_library_path = _pwt_library_pathPtr
+      .asFunction<ffi.Pointer<ffi.Char> Function()>();
+
   int pwt_initialize_dart_api_dl(ffi.Pointer<ffi.Void> data) {
     return _pwt_initialize_dart_api_dl(data);
   }

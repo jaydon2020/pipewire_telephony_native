@@ -39,7 +39,7 @@ while IFS= read -r dependency; do
   esac
 done < <(sed -n 's/.*Shared library: \[\(.*\)\]/\1/p' <<<"${dynamic}")
 
-expected=$'pwt_abi_version\npwt_client_create\npwt_client_destroy\npwt_client_start\npwt_client_stop\npwt_client_submit\npwt_free\npwt_initialize_dart_api_dl'
+expected=$'pwt_abi_version\npwt_client_create\npwt_client_destroy\npwt_client_start\npwt_client_stop\npwt_client_submit\npwt_free\npwt_initialize_dart_api_dl\npwt_library_path'
 actual="$(nm -D --defined-only --format=posix "${library}" | awk '{print $1}' | sort)"
 [[ "${actual}" == "${expected}" ]] || {
   echo "exported C ABI does not match the required pwt symbol set" >&2

@@ -23,6 +23,8 @@ constexpr auto kRequest =
 
 int main() {
   require(pwt_abi_version() == 1);
+  require(pwt_library_path() != nullptr);
+  require(*pwt_library_path() != '\0');
   require(pwt_initialize_dart_api_dl(nullptr) == PWT_STATUS_INVALID_ARGUMENT);
 
   auto *const null_handle = static_cast<void *>(nullptr);

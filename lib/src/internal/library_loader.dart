@@ -9,7 +9,17 @@
 import 'dart:ffi';
 import 'dart:io';
 
+import 'package:ffi/ffi.dart';
+
 const _libraryName = 'libpipewire_telephony_native.so';
+
+@Native<Pointer<Char> Function()>(
+  symbol: 'pwt_library_path',
+  assetId:
+      'package:pipewire_telephony_native/src/ffi/'
+      'pipewire_telephony_native_asset.dart',
+)
+external Pointer<Char> _nativeLibraryPath();
 
 (DynamicLibrary, String) loadPipeWireTelephonyLibrary() {
   if (!Platform.isLinux) {
@@ -29,6 +39,16 @@ const _libraryName = 'libpipewire_telephony_native.so';
   final sibling = _findLoadedLibrarySibling();
   if (sibling != null) {
     return (DynamicLibrary.open(sibling), sibling);
+  }
+
+  try {
+    final pointer = _nativeLibraryPath();
+    if (pointer != nullptr) {
+      final path = pointer.cast<Utf8>().toDartString();
+      if (path.isNotEmpty) return (DynamicLibrary.open(path), path);
+    }
+  } catch (_) {
+    // The Native Asset is optional for legacy Flutter CMake deployments.
   }
 
   final executableDirectory = File(Platform.resolvedExecutable).parent.path;

@@ -27,6 +27,8 @@ typedef int32_t pwt_status;
 #define PWT_BUS_AUTO 2
 
 PWT_EXPORT uint32_t pwt_abi_version(void);
+/* Absolute loader path borrowed for the native asset's lifetime. */
+PWT_EXPORT const char *pwt_library_path(void);
 PWT_EXPORT pwt_status pwt_initialize_dart_api_dl(void *data);
 
 PWT_EXPORT void *pwt_client_create(int32_t bus, const uint8_t *test_bus_address,

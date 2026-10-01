@@ -9,6 +9,7 @@
 #include <vector>
 
 #include <dart_api_dl.h>
+#include <dlfcn.h>
 
 #include "client_context.h"
 #include "telephony_codec.h"
@@ -58,6 +59,13 @@ std::shared_ptr<pwt::ClientContext> client_for(void *handle) {
 extern "C" {
 
 uint32_t pwt_abi_version() { return kAbiVersion; }
+
+const char *pwt_library_path() {
+  Dl_info info{};
+  if (dladdr(reinterpret_cast<void *>(&pwt_library_path), &info) == 0)
+    return nullptr;
+  return info.dli_fname;
+}
 
 pwt_status pwt_initialize_dart_api_dl(void *data) {
   try {

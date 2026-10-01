@@ -5,6 +5,7 @@ option(PWT_BUILD_DART_INTEGRATION_TESTS
   "Run Dart tests that load the native shared library" ON)
 option(PWT_REQUIRE_CROSS_COMPILE
   "Fail unless configured by a cross-compiling toolchain with a sysroot" OFF)
+option(PWT_HOOK_BUILD "Build is driven by the Dart Native Assets hook" OFF)
 
 if(PWT_REQUIRE_CROSS_COMPILE)
   if(NOT CMAKE_CROSSCOMPILING)
@@ -78,7 +79,7 @@ target_compile_definitions(pipewire_telephony_native
 )
 
 target_link_libraries(pipewire_telephony_native
-  PRIVATE pipewire_telephony_native_core
+  PRIVATE pipewire_telephony_native_core ${CMAKE_DL_LIBS}
 )
 
 set_target_properties(pipewire_telephony_native PROPERTIES

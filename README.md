@@ -18,6 +18,18 @@ git submodule update --init --recursive
 flutter pub get
 ```
 
+## Native Assets Build
+
+`dart run`, `dart test`, and Flutter builds invoke `hook/build.dart`. The hook
+builds `libpipewire_telephony_native.so` with CMake and registers it as a bundled
+`CodeAsset`, so applications do not need to copy the library manually. Git
+dependencies restore the pinned sdbus-c++ submodule when repository metadata is
+available; published archives must already contain its source.
+
+Set `SKIP_NATIVE_BUILD=1` only when an integration such as the AGL recipe builds
+and installs the native library separately. The existing Flutter Linux CMake
+path remains supported for those deployments.
+
 ## Dart API
 
 The default is `PipeWireBus.automatic`: it checks the current process's session
@@ -105,8 +117,9 @@ commands to the production bus.
 ## Acknowledgements
 
 - [bluez_native](https://github.com/jwinarske/bluez_native) (Apache-2.0): the
-  FFI handle lifetime, Dart codec/type organization, library loader, and
-  development-script patterns are derived from this project.
+  Native Assets build hook, FFI handle lifetime, Dart codec/type organization,
+  library loader, and development-script patterns are derived from this
+  project.
 - [appstream_dart](https://github.com/meta-flutter/appstream_dart)
   (Apache-2.0): the original pattern for dynamic-library resolution used by
   `bluez_native` and this package.
