@@ -18,8 +18,9 @@ if ! find "${BUILD_DIR}" -name '*.gcda' -print -quit | grep -q .; then
   exit 0
 fi
 
-lcov --capture --directory "${BUILD_DIR}" \
-  --output-file "${BUILD_DIR}/coverage-raw.info"
-lcov --remove "${BUILD_DIR}/coverage-raw.info" '*/third_party/*' '*/test/*' \
-  '/usr/*' --output-file "${BUILD_DIR}/coverage.info"
+lcov --capture \
+  --directory "${BUILD_DIR}/CMakeFiles/pipewire_telephony_native_core.dir" \
+  --directory "${BUILD_DIR}/CMakeFiles/pipewire_telephony_native.dir" \
+  --exclude '*/third_party/*' --exclude '/usr/*' \
+  --output-file "${BUILD_DIR}/coverage.info"
 lcov --summary "${BUILD_DIR}/coverage.info"
