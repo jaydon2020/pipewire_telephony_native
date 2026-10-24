@@ -5,6 +5,25 @@ import 'package:test/test.dart';
 import '../hook/build.dart' as hook;
 
 void main() {
+  test('invalid timeouts fail before loading a native client', () {
+    for (final timeout in [Duration.zero, const Duration(microseconds: -1)]) {
+      expect(
+        () => PipeWireTelephonyClient(startupTimeout: timeout),
+        throwsArgumentError,
+      );
+      expect(
+        () => PipeWireTelephonyClient(operationTimeout: timeout),
+        throwsArgumentError,
+      );
+    }
+    expect(
+      () => PipeWireTelephonyClient(
+        operationTimeout: const Duration(seconds: 30, microseconds: 1),
+      ),
+      throwsArgumentError,
+    );
+  });
+
   test('Linux host and target are accepted', () {
     expect(
       () => hook.validateOperatingSystems(OS.linux, OS.linux),

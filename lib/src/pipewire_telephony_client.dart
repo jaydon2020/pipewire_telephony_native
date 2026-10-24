@@ -14,18 +14,52 @@ part 'pipewire_audio_gateway.dart';
 part 'pipewire_call.dart';
 part 'pipewire_telephony_transport.dart';
 
+/// Discovers and controls PipeWire Bluetooth telephony objects on Linux.
+///
+/// Call [connect] before using discovered objects and await [close] when done.
+/// A client that becomes unavailable cannot reconnect; create a new client.
+/// Commands complete after a D-Bus reply or throw [PipeWireTelephonyException].
 final class PipeWireTelephonyClient {
+  /// Creates a client and loads its native library.
+  ///
+  /// [startupTimeout] must be positive. [operationTimeout] must be positive and
+  /// at most 30 seconds, the native command deadline. A shorter operation timeout
+  /// only stops waiting; it does not cancel the remote command.
   PipeWireTelephonyClient({
     this.bus = PipeWireBus.automatic,
     this.startupTimeout = const Duration(seconds: 30),
     this.operationTimeout = const Duration(seconds: 30),
   }) {
+    if (startupTimeout <= Duration.zero) {
+      throw ArgumentError.value(
+        startupTimeout,
+        'startupTimeout',
+        'must be positive',
+      );
+    }
+    if (operationTimeout <= Duration.zero ||
+        operationTimeout > const Duration(seconds: 30)) {
+      throw ArgumentError.value(
+        operationTimeout,
+        'operationTimeout',
+        'must be positive and at most 30 seconds',
+      );
+    }
     final (library, path) = loadPipeWireTelephonyLibrary();
     _bindings = PwtNativeBindings(library, libraryPath: path);
   }
 
+  /// D-Bus scope searched by [connect].
   final PipeWireBus bus;
+
+  /// Maximum time to wait for the initial discovery snapshot.
   final Duration startupTimeout;
+
+  /// Maximum reply wait, up to the native 30-second deadline.
+  ///
+  /// A timeout leaves the remote outcome unknown. A mutation can keep its
+  /// gateway busy until native completion or expiry. Refresh state before
+  /// deciding whether to retry; retrying a dial may create another call.
   final Duration operationTimeout;
   final _stateChanges =
       StreamController<PipeWireTelephonyClientState>.broadcast(sync: true);
@@ -58,19 +92,43 @@ final class PipeWireTelephonyClient {
   int _generation = 0;
   int _nextRequestId = 1;
 
+  /// Current connection lifecycle state.
   PipeWireTelephonyClientState get state => _state;
+
+  /// Most recent startup or service-loss error, if any.
   PipeWireTelephonyException? get lastError => _lastError;
+
+  /// Lifecycle changes; read [state] for the current value.
   Stream<PipeWireTelephonyClientState> get stateChanged => _stateChanges.stream;
+
+  /// Immutable snapshot of currently discovered gateways.
   List<PipeWireAudioGateway> get gateways =>
       List.unmodifiable(_gateways.values);
+
+  /// Gateways discovered after initial connection.
   Stream<PipeWireAudioGateway> get gatewayAdded => _gatewayAdded.stream;
+
+  /// Gateways removed from discovery; emitted objects are already invalid.
   Stream<PipeWireAudioGateway> get gatewayRemoved => _gatewayRemoved.stream;
+
+  /// Gateways whose properties or call membership changed.
   Stream<PipeWireAudioGateway> get gatewayChanged => _gatewayChanged.stream;
+
+  /// Immutable snapshot of calls across all gateways.
   List<PipeWireCall> get calls => List.unmodifiable(_calls.values);
+
+  /// Calls discovered after initial connection.
   Stream<PipeWireCall> get callAdded => _callAdded.stream;
+
+  /// Removed calls; emitted objects are already invalid.
   Stream<PipeWireCall> get callRemoved => _callRemoved.stream;
+
+  /// Calls whose cached properties changed.
   Stream<PipeWireCall> get callChanged => _callChanged.stream;
 
+  /// Refreshes all currently discovered objects using D-Bus property reads.
+  ///
+  /// Throws [StateError] unless ready. Objects may disappear during refresh.
   Future<void> refresh() async {
     _ensureReady();
     await Future.wait([
@@ -146,6 +204,10 @@ final class PipeWireTelephonyClient {
     }
   }
 
+  /// Connects and waits for the initial gateway, call, and transport snapshot.
+  ///
+  /// Concurrent calls share startup. Calling while ready succeeds immediately;
+  /// calling after service loss or closing fails with [StateError].
   Future<void> connect() {
     if (_state == PipeWireTelephonyClientState.ready) {
       return Future.value();
@@ -188,6 +250,10 @@ final class PipeWireTelephonyClient {
     return completer.future;
   }
 
+  /// Stops native work, releases resources, and invalidates discovered objects.
+  ///
+  /// Repeated calls return the same future. Streams close without waiting for
+  /// paused subscriptions to resume.
   Future<void> close() => _closeFuture ??= _close();
 
   Future<void> _close() async {
@@ -311,7 +377,7 @@ final class PipeWireTelephonyClient {
   ) {
     _clearGateways(notify: false);
     for (final value in properties) {
-      _gateways[value.path] = PipeWireAudioGateway.internal(
+      _gateways[value.path] = PipeWireAudioGateway._(
         this,
         clientGeneration,
         value,
@@ -326,8 +392,8 @@ final class PipeWireTelephonyClient {
       case 'gatewayAdded':
         _removeCallsForGateway(properties.path);
         final previous = _gateways.remove(properties.path);
-        previous?.invalidate();
-        final gateway = PipeWireAudioGateway.internal(
+        previous?._invalidate();
+        final gateway = PipeWireAudioGateway._(
           this,
           event.clientGeneration,
           properties,
@@ -339,7 +405,7 @@ final class PipeWireTelephonyClient {
         if (gateway == null || gateway.incarnation != properties.incarnation) {
           return;
         }
-        gateway.updateProperties(properties);
+        gateway._updateProperties(properties);
         if (!_gatewayChanged.isClosed) _gatewayChanged.add(gateway);
       case 'gatewayRemoved':
         final gateway = _gateways[properties.path];
@@ -348,7 +414,7 @@ final class PipeWireTelephonyClient {
         }
         _removeCallsForGateway(properties.path);
         _gateways.remove(properties.path);
-        gateway.invalidate();
+        gateway._invalidate();
         if (!_gatewayRemoved.isClosed) _gatewayRemoved.add(gateway);
     }
   }
@@ -358,7 +424,7 @@ final class PipeWireTelephonyClient {
     final removed = _gateways.values.toList(growable: false);
     _gateways.clear();
     for (final gateway in removed) {
-      gateway.invalidate();
+      gateway._invalidate();
       if (notify && !_gatewayRemoved.isClosed) _gatewayRemoved.add(gateway);
     }
   }
@@ -368,9 +434,9 @@ final class PipeWireTelephonyClient {
     for (final value in properties) {
       final gateway = _gateways[value.gatewayPath];
       if (gateway == null) continue;
-      final call = PipeWireCall.internal(clientGeneration, gateway, value);
+      final call = PipeWireCall._(clientGeneration, gateway, value);
       _calls[value.path] = call;
-      gateway.addCall(call);
+      gateway._addCall(call);
     }
   }
 
@@ -383,30 +449,30 @@ final class PipeWireTelephonyClient {
         if (gateway == null) return;
         final previous = _calls.remove(properties.path);
         if (previous != null) {
-          previous.gateway.removeCall(previous.objectPath);
-          previous.invalidate();
+          previous.gateway._removeCall(previous.objectPath);
+          previous._invalidate();
         }
-        final call = PipeWireCall.internal(
+        final call = PipeWireCall._(
           event.clientGeneration,
           gateway,
           properties,
         );
         _calls[properties.path] = call;
-        gateway.addCall(call);
+        gateway._addCall(call);
         if (!_callAdded.isClosed) _callAdded.add(call);
         if (!_gatewayChanged.isClosed) _gatewayChanged.add(gateway);
       case 'callChanged':
         final call = _calls[properties.path];
         if (call == null || call.incarnation != properties.incarnation) return;
-        call.updateProperties(properties);
+        call._updateProperties(properties);
         if (!_callChanged.isClosed) _callChanged.add(call);
       case 'callRemoved':
         final call = _calls[properties.path];
         if (call == null || call.incarnation != properties.incarnation) return;
-        call.updateProperties(properties);
+        call._updateProperties(properties);
         _calls.remove(properties.path);
-        call.gateway.removeCall(properties.path);
-        call.invalidate();
+        call.gateway._removeCall(properties.path);
+        call._invalidate();
         if (!_callRemoved.isClosed) _callRemoved.add(call);
         if (!_gatewayChanged.isClosed) _gatewayChanged.add(call.gateway);
     }
@@ -417,8 +483,8 @@ final class PipeWireTelephonyClient {
     List<PwtTransportProperties> properties,
   ) {
     for (final value in properties) {
-      _gateways[value.path]?.replaceTransport(
-        PipeWireTelephonyTransport.internal(
+      _gateways[value.path]?._replaceTransport(
+        PipeWireTelephonyTransport._(
           clientGeneration,
           _gateways[value.path]!,
           value,
@@ -434,8 +500,8 @@ final class PipeWireTelephonyClient {
     if (gateway == null) return;
     switch (event.kind) {
       case 'transportAdded':
-        gateway.replaceTransport(
-          PipeWireTelephonyTransport.internal(
+        gateway._replaceTransport(
+          PipeWireTelephonyTransport._(
             event.clientGeneration,
             gateway,
             properties,
@@ -447,14 +513,14 @@ final class PipeWireTelephonyClient {
             transport.incarnation != properties.incarnation) {
           return;
         }
-        transport.updateProperties(properties);
+        transport._updateProperties(properties);
       case 'transportRemoved':
         final transport = gateway.transport;
         if (transport == null ||
             transport.incarnation != properties.incarnation) {
           return;
         }
-        gateway.removeTransport();
+        gateway._removeTransport();
     }
   }
 
@@ -464,8 +530,8 @@ final class PipeWireTelephonyClient {
         .toList(growable: false);
     for (final call in removed) {
       _calls.remove(call.objectPath);
-      call.gateway.removeCall(call.objectPath);
-      call.invalidate();
+      call.gateway._removeCall(call.objectPath);
+      call._invalidate();
       if (notify && !_callRemoved.isClosed) _callRemoved.add(call);
     }
   }
@@ -474,8 +540,8 @@ final class PipeWireTelephonyClient {
     final removed = _calls.values.toList(growable: false);
     _calls.clear();
     for (final call in removed) {
-      call.gateway.removeCall(call.objectPath);
-      call.invalidate();
+      call.gateway._removeCall(call.objectPath);
+      call._invalidate();
       if (notify && !_callRemoved.isClosed) _callRemoved.add(call);
     }
   }

@@ -7,7 +7,7 @@ PipeWire 1.6.6 method and property surface through typed Dart objects.
 ## Requirements
 
 - Linux with `org.pipewire.Telephony` available on D-Bus
-- Flutter/Dart 3.13 or newer
+- Flutter 3.38.3 / Dart 3.10.1 or newer
 - CMake 3.22, a C++23 compiler, Ninja or Make, and target `libsystemd`
 - `sdbus-c++` submodule contents and the vendored Glaze headers
 
@@ -58,6 +58,13 @@ Objects become invalid when their D-Bus interface, parent gateway, or service
 owner disappears. Methods complete from remote D-Bus replies and preserve
 remote error names in `PipeWireTelephonyException`.
 
+`startupTimeout` must be positive. `operationTimeout` must be positive and at
+most 30 seconds, matching the native command deadline. A shorter timeout only
+stops Dart from waiting: the remote command can still succeed, and its gateway
+can stay busy until native completion or expiry. A timeout means the outcome is
+unknown. Refresh state before deciding whether to retry, especially for `dial`,
+which could otherwise create a second call.
+
 ## Examples
 
 The standalone Dart examples separate discovery, watching, gateway commands and
@@ -97,9 +104,14 @@ to another user's private session bus.
 ## AGL
 
 Cross-build and prebuilt packaging are documented in
-[`docs/agl_build.md`](docs/agl_build.md). The target image must expose PipeWire
+[`doc/agl_build.md`](doc/agl_build.md). The target image must expose PipeWire
 telephony on the system bus and grant the application user the destination's
 D-Bus policy. Do not run the application as root to bypass missing policy.
+
+The initial 0.0.1 package is verified on desktop Linux with private D-Bus mock
+services. Real-phone call flows, two-way audio and target-prebuilt equivalence
+still require validation on your AGL image; passing host tests does not establish
+those deployment results.
 
 ## Verification
 
@@ -115,6 +127,9 @@ Native integration tests create a private D-Bus daemon and never issue call
 commands to the production bus.
 
 ## Acknowledgements
+
+See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for bundled dependency
+licenses and instructions for distributing applications with the native library.
 
 - [bluez_native](https://github.com/jwinarske/bluez_native) (Apache-2.0): the
   Native Assets build hook, FFI handle lifetime, Dart codec/type organization,

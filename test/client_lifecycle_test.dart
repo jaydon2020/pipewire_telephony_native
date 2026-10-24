@@ -127,9 +127,9 @@ void main() {
         expect(await removed.timeout(const Duration(seconds: 2)), original);
         expect(cacheWasEmptyAtRemoval, isTrue);
         expect(original.isValid, isFalse);
-        expect(original.ensureValid, throwsStateError);
+        expect(original.refresh, throwsStateError);
         expect(callBeforeParentLoss.isValid, isFalse);
-        expect(callBeforeParentLoss.ensureValid, throwsStateError);
+        expect(callBeforeParentLoss.refresh, throwsStateError);
 
         final added = client.gatewayAdded.first;
         service.stdin.writeln('add');
@@ -523,7 +523,7 @@ void main() {
           await service.stdin.flush();
           await removed;
           expect(transport.isValid, isFalse);
-          expect(transport.ensureValid, throwsStateError);
+          expect(transport.refresh, throwsStateError);
 
           final added = client.gatewayChanged.firstWhere(
             (changed) =>

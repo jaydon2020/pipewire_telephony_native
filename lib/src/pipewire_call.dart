@@ -2,9 +2,12 @@ part of 'pipewire_telephony_client.dart';
 
 /// A discovered `org.pipewire.Telephony.Call1` object.
 final class PipeWireCall {
-  PipeWireCall.internal(this.clientGeneration, this.gateway, this._properties);
+  PipeWireCall._(this.clientGeneration, this.gateway, this._properties);
 
+  /// Connection identity that distinguishes objects from different clients.
   final int clientGeneration;
+
+  /// Gateway that owns this call.
   final PipeWireAudioGateway gateway;
   PwtCallProperties _properties;
   bool _valid = true;
@@ -12,13 +15,28 @@ final class PipeWireCall {
     sync: true,
   );
 
+  /// D-Bus object path of this call.
   String get objectPath => _properties.path;
+
+  /// Discovery identity, changed when an object path is removed and reused.
   int get incarnation => _properties.incarnation;
+
+  /// Remote line identification, or null if unavailable.
   String? get lineIdentification => _properties.lineIdentification;
+
+  /// Incoming line label, or null if unavailable.
   String? get incomingLine => _properties.incomingLine;
+
+  /// Caller name, or null if unavailable.
   String? get name => _properties.name;
+
+  /// Whether this call is multiparty, or null if unavailable.
   bool? get multiparty => _properties.multiparty;
+
+  /// Unmodified service state, preserving future values.
   String? get rawState => _properties.state;
+
+  /// Typed state; unrecognized service values map to [PipeWireCallState.unknown].
   PipeWireCallState? get state => switch (rawState) {
     null => null,
     'active' => PipeWireCallState.active,
@@ -30,11 +48,16 @@ final class PipeWireCall {
     'disconnected' => PipeWireCallState.disconnected,
     _ => PipeWireCallState.unknown,
   };
+
+  /// Whether this call and its parent gateway are still available.
   bool get isValid => _valid && gateway.isValid;
+
+  /// Changed D-Bus property names, emitted after cached values are updated.
   Stream<List<String>> get propertiesChanged => _propertiesChanged.stream;
 
+  /// Reloads this call's properties; throws [StateError] if invalid.
   Future<void> refresh() {
-    ensureValid();
+    _ensureValid();
     return gateway._client._command(
       operation: 'refreshCall',
       path: objectPath,
@@ -43,8 +66,9 @@ final class PipeWireCall {
     );
   }
 
+  /// Requests answering this call; throws [StateError] if invalid.
   Future<void> answer() {
-    ensureValid();
+    _ensureValid();
     return gateway._client._command(
       operation: 'answer',
       path: objectPath,
@@ -53,8 +77,9 @@ final class PipeWireCall {
     );
   }
 
+  /// Requests ending this call; throws [StateError] if invalid.
   Future<void> hangup() {
-    ensureValid();
+    _ensureValid();
     return gateway._client._command(
       operation: 'hangup',
       path: objectPath,
@@ -63,7 +88,7 @@ final class PipeWireCall {
     );
   }
 
-  void updateProperties(PwtCallProperties properties) {
+  void _updateProperties(PwtCallProperties properties) {
     if (isValid && properties.incarnation == incarnation) {
       _properties = properties;
       if (properties.changed.isNotEmpty && !_propertiesChanged.isClosed) {
@@ -72,13 +97,13 @@ final class PipeWireCall {
     }
   }
 
-  void invalidate() {
+  void _invalidate() {
     if (!_valid) return;
     _valid = false;
     unawaited(_propertiesChanged.close());
   }
 
-  void ensureValid() {
+  void _ensureValid() {
     if (!isValid) {
       throw StateError('call is no longer available');
     }

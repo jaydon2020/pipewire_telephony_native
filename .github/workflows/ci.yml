@@ -11,6 +11,9 @@ concurrency:
 jobs:
   analyze:
     runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        flutter: [any, '3.38.3']
     steps:
       - uses: actions/checkout@v4
         with:
@@ -18,9 +21,13 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: ${{ matrix.flutter }}
       - run: flutter pub get
+      - run: flutter pub get
+        working-directory: example/flutter_telephony
       - run: flutter analyze --fatal-infos
-      - run: dart format --output=none --set-exit-if-changed lib example/lib
+      - run: dart format --output=none --set-exit-if-changed lib hook test example
+        if: matrix.flutter == 'any'
 
   native:
     runs-on: ubuntu-24.04
@@ -39,6 +46,7 @@ jobs:
       - run: cmake -S native -B build/native -GNinja -DBUILD_TESTING=ON
       - run: cmake --build build/native --parallel
       - run: ctest --test-dir build/native --output-on-failure
+      - run: dart test test/build_hook_test.dart test/codec_test.dart
       - run: scripts/clang_format.sh check
       - run: scripts/clang_tidy.sh build/native
       - run: scripts/coverage.sh

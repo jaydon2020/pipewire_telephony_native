@@ -2,13 +2,11 @@ part of 'pipewire_telephony_client.dart';
 
 /// A discovered `org.pipewire.Telephony.AudioGateway1` object.
 final class PipeWireAudioGateway {
-  PipeWireAudioGateway.internal(
-    this._client,
-    this.clientGeneration,
-    this._properties,
-  );
+  PipeWireAudioGateway._(this._client, this.clientGeneration, this._properties);
 
   final PipeWireTelephonyClient _client;
+
+  /// Connection identity that distinguishes objects from different clients.
   final int clientGeneration;
   PwtGatewayProperties _properties;
   bool _valid = true;
@@ -18,18 +16,36 @@ final class PipeWireAudioGateway {
     sync: true,
   );
 
+  /// D-Bus object path of this gateway.
   String get objectPath => _properties.path;
+
+  /// Discovery identity, changed when an object path is removed and reused.
   int get incarnation => _properties.incarnation;
+
+  /// Remote Bluetooth device address, or null if unavailable.
   String? get address => _properties.address;
+
+  /// Cached HFP speaker volume in 0..15, or null if unavailable.
   int? get speakerVolume => _properties.speakerVolume;
+
+  /// Cached HFP microphone volume in 0..15, or null if unavailable.
   int? get microphoneVolume => _properties.microphoneVolume;
+
+  /// Whether this object still belongs to the current discovery snapshot.
   bool get isValid => _valid;
+
+  /// Immutable snapshot of this gateway's discovered calls.
   List<PipeWireCall> get calls => List.unmodifiable(_calls.values);
+
+  /// Optional SCO transport; it can be added or removed independently.
   PipeWireTelephonyTransport? get transport => _transport;
+
+  /// Changed D-Bus property names, emitted after cached values are updated.
   Stream<List<String>> get propertiesChanged => _propertiesChanged.stream;
 
+  /// Reloads this gateway's properties; throws [StateError] if invalid.
   Future<void> refresh() {
-    ensureValid();
+    _ensureValid();
     return _client._command(
       operation: 'refreshGateway',
       path: objectPath,
@@ -38,8 +54,12 @@ final class PipeWireAudioGateway {
     );
   }
 
+  /// Dials 1..80 characters from `0123456789+*#,ABCD`.
+  ///
+  /// Throws [ArgumentError] for invalid input and [StateError] if invalid.
+  /// The new call arrives through discovery; the reply does not return a call.
   Future<void> dial(String number) {
-    ensureValid();
+    _ensureValid();
     if (number.isEmpty || number.length > 80 || !_validDialText(number)) {
       throw ArgumentError.value(number, 'number', 'invalid dial string');
     }
@@ -52,8 +72,11 @@ final class PipeWireAudioGateway {
     );
   }
 
+  /// Sends DTMF characters from `0123456789*#ABCD`; empty text is allowed.
+  ///
+  /// Throws [ArgumentError] for invalid input and [StateError] if invalid.
   Future<void> sendTones(String tones) {
-    ensureValid();
+    _ensureValid();
     if (!_validToneText(tones)) {
       throw ArgumentError.value(tones, 'tones', 'invalid DTMF string');
     }
@@ -66,8 +89,9 @@ final class PipeWireAudioGateway {
     );
   }
 
+  /// Requests termination of all calls on this gateway.
   Future<void> hangupAll() {
-    ensureValid();
+    _ensureValid();
     return _client._command(
       operation: 'hangupAll',
       path: objectPath,
@@ -76,18 +100,23 @@ final class PipeWireAudioGateway {
     );
   }
 
+  /// Requests swapping the active and held calls.
   Future<void> swapCalls() => _gatewayCommand('swapCalls');
 
+  /// Requests releasing active calls and answering a waiting call.
   Future<void> releaseAndAnswer() => _gatewayCommand('releaseAndAnswer');
 
+  /// Requests releasing active calls and activating held calls.
   Future<void> releaseAndSwap() => _gatewayCommand('releaseAndSwap');
 
+  /// Requests holding active calls and answering a waiting call.
   Future<void> holdAndAnswer() => _gatewayCommand('holdAndAnswer');
 
+  /// Requests combining calls into a multiparty call, if supported by the phone.
   Future<void> createMultiparty() => _gatewayCommand('createMultiparty');
 
   Future<void> _gatewayCommand(String operation) {
-    ensureValid();
+    _ensureValid();
     return _client._command(
       operation: operation,
       path: objectPath,
@@ -96,12 +125,14 @@ final class PipeWireAudioGateway {
     );
   }
 
+  /// Sets speaker volume in 0..15; throws [RangeError] outside that range.
   Future<void> setSpeakerVolume(int volume) => _setVolume(
     operation: 'setSpeakerVolume',
     argumentName: 'volume',
     volume: volume,
   );
 
+  /// Sets microphone volume in 0..15; throws [RangeError] outside that range.
   Future<void> setMicrophoneVolume(int volume) => _setVolume(
     operation: 'setMicrophoneVolume',
     argumentName: 'volume',
@@ -113,7 +144,7 @@ final class PipeWireAudioGateway {
     required String argumentName,
     required int volume,
   }) {
-    ensureValid();
+    _ensureValid();
     if (volume < 0 || volume > 15) {
       throw RangeError.range(volume, 0, 15, argumentName);
     }
@@ -126,7 +157,7 @@ final class PipeWireAudioGateway {
     );
   }
 
-  void updateProperties(PwtGatewayProperties properties) {
+  void _updateProperties(PwtGatewayProperties properties) {
     if (_valid && properties.incarnation == incarnation) {
       _properties = properties;
       if (properties.changed.isNotEmpty && !_propertiesChanged.isClosed) {
@@ -135,32 +166,32 @@ final class PipeWireAudioGateway {
     }
   }
 
-  void addCall(PipeWireCall call) => _calls[call.objectPath] = call;
+  void _addCall(PipeWireCall call) => _calls[call.objectPath] = call;
 
-  void removeCall(String path) => _calls.remove(path);
+  void _removeCall(String path) => _calls.remove(path);
 
-  void replaceTransport(PipeWireTelephonyTransport transport) {
-    _transport?.invalidate();
+  void _replaceTransport(PipeWireTelephonyTransport transport) {
+    _transport?._invalidate();
     _transport = transport;
   }
 
-  void removeTransport() {
-    _transport?.invalidate();
+  void _removeTransport() {
+    _transport?._invalidate();
     _transport = null;
   }
 
-  void invalidate() {
+  void _invalidate() {
     if (!_valid) return;
     _valid = false;
-    removeTransport();
+    _removeTransport();
     unawaited(_propertiesChanged.close());
     for (final call in _calls.values) {
-      call.invalidate();
+      call._invalidate();
     }
     _calls.clear();
   }
 
-  void ensureValid() {
+  void _ensureValid() {
     if (!_valid) {
       throw StateError('audio gateway is no longer available');
     }

@@ -7,10 +7,12 @@ TEMP_DIR="$(mktemp -d)"
 trap 'rm -rf "${TEMP_DIR}"' EXIT
 
 cd "${ROOT_DIR}"
+cp lib/src/ffi/bindings_generated.dart "${TEMP_DIR}/bindings_generated.dart"
+cp -r native/generated "${TEMP_DIR}/generated"
 dart run ffigen --config ffigen.yaml
 "${ROOT_DIR}/scripts/generate_proxies.sh"
-git diff --exit-code -- \
-  lib/pipewire_telephony_native_bindings_generated.dart native/generated
+diff -u "${TEMP_DIR}/bindings_generated.dart" lib/src/ffi/bindings_generated.dart
+diff -ru "${TEMP_DIR}/generated" native/generated
 
 (cd example/flutter_telephony && flutter build linux --debug)
 BUNDLE="${ROOT_DIR}/example/flutter_telephony/build/linux/x64/debug/bundle"

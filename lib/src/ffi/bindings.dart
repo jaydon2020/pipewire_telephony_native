@@ -5,7 +5,7 @@ import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 
-import '../../pipewire_telephony_native_bindings_generated.dart';
+import 'bindings_generated.dart';
 
 enum PwtNativeStatus {
   ok(PWT_STATUS_OK),

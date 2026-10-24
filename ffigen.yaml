@@ -4,7 +4,7 @@ description: |
   Bindings for `native/include/pipewire_telephony_native.h`.
 
   Regenerate bindings with `dart run ffigen --config ffigen.yaml`.
-output: 'lib/pipewire_telephony_native_bindings_generated.dart'
+output: 'lib/src/ffi/bindings_generated.dart'
 headers:
   entry-points:
     - 'native/include/pipewire_telephony_native.h'
