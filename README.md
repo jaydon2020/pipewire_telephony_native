@@ -8,7 +8,7 @@ PipeWire 1.6.6 method and property surface through typed Dart objects.
 
 | Area | Supported feature | Dart API / notes |
 | --- | --- | --- |
-| Platform | Linux Flutter and standalone Dart | Native Assets builds require the target architecture to match the host; AGL cross-builds use the documented prebuilt/toolchain path. |
+| Platform | Linux Flutter and standalone Dart | Native Assets supports host builds and explicit CMake-toolchain cross-builds; AGL also has a documented prebuilt path. |
 | D-Bus connection | Automatic, session, or system bus selection | `PipeWireBus.automatic`, `.session`, and `.system` |
 | Gateway discovery | Initial snapshot plus add, remove, and property-change events | `gateways`, `gatewayAdded`, `gatewayRemoved`, `gatewayChanged` |
 | Call discovery | Initial snapshot plus add, remove, and property-change events | `calls`, `callAdded`, `callRemoved`, `callChanged` |
@@ -60,14 +60,27 @@ builds `libpipewire_telephony_native.so` with CMake and registers it as a bundle
 dependencies restore the pinned sdbus-c++ submodule when repository metadata is
 available; published archives must already contain its source.
 
-Set `SKIP_NATIVE_BUILD=1` only when an integration such as the AGL recipe builds
-and installs the native library separately. The existing Flutter Linux CMake
-path remains supported for those deployments.
+When an integration such as an AGL recipe builds and installs the native library
+separately, disable the hook in the application or workspace pubspec:
 
-The hook supports a Linux target matching the host architecture. For AGL
-cross-builds, use the target toolchain/prebuilt instructions below. Every native
-CMake build checks the output ELF machine/class and public ABI using `readelf`
-and `nm` (binutils); a foreign architecture cannot be supplied by a host compiler.
+```yaml
+hooks:
+  user_defines:
+    pipewire_telephony_native:
+      skip_native_build: true
+```
+
+The existing Flutter Linux CMake path remains supported for those deployments.
+`SKIP_NATIVE_BUILD=1` remains a compatibility fallback for hook runners that
+preserve it, but standard Native Assets hooks strip undeclared environment
+variables; prefer the user define above.
+
+The hook supports a Linux target matching the host architecture. It also accepts
+an explicit `cmake_toolchain_file` user define for AGL cross-builds; see the
+target toolchain and prebuilt instructions below. Every native CMake build
+checks the output ELF machine/class and public ABI using
+`readelf` and `nm` (binutils); a foreign architecture cannot be supplied by a
+host compiler.
 
 Runtime loading prefers the declared native asset, then known executable-relative
 bundle locations for legacy deployments. It never searches the working directory
@@ -183,9 +196,10 @@ See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for bundled dependency
 licenses and instructions for distributing applications with the native library.
 
 - [bluez_native](https://github.com/jwinarske/bluez_native) (Apache-2.0): the
-  Native Assets build hook, FFI handle lifetime, Dart codec/type organization,
-  library loader, and development-script patterns are derived from this
-  project.
+  Native Assets build hook, FFI handle lifetime, client lifecycle, Dart
+  codec/type organization, library loader, native CMake configuration, and
+  development-script patterns are derived from this project. Adapted files
+  carry an `SPDX-License-Identifier: Apache-2.0` header.
 - [appstream_dart](https://github.com/meta-flutter/appstream_dart)
   (Apache-2.0): the original pattern for dynamic-library resolution used by
   `bluez_native` and this package.

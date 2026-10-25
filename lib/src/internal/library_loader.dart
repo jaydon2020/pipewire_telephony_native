@@ -1,11 +1,14 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Joel Winarske <joel.winarske@gmail.com>
+// SPDX-FileCopyrightText: 2026 Jian De
+
 // DynamicLibrary resolution for libpipewire_telephony_native.so.
 //
 // Search order adapted from https://github.com/jwinarske/bluez_native, which
 // is in turn patterned after
 // https://github.com/meta-flutter/appstream_dart/blob/main/lib/src/bindings.dart.
-// Derived portions are Copyright 2026 Joel Winarske and licensed under
-// Apache-2.0; see LICENSES/Apache-2.0.txt. Subsequent modifications are
-// Copyright 2026 Jian De and licensed under the package's BSD-3-Clause license.
+// Both upstream projects are licensed under Apache-2.0; see
+// LICENSES/Apache-2.0.txt.
 
 import 'dart:ffi';
 import 'dart:io';

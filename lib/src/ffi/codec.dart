@@ -1,9 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Joel Winarske <joel.winarske@gmail.com>
+// SPDX-FileCopyrightText: 2026 Jian De
+
 // JSON codec for the versioned PipeWire telephony FFI protocol.
 //
 // The codec organization is adapted from
 // https://github.com/jwinarske/bluez_native under Apache-2.0; see
-// LICENSES/Apache-2.0.txt. Derived portions are Copyright 2026 Joel Winarske;
-// subsequent modifications are Copyright 2026 Jian De under BSD-3-Clause.
+// LICENSES/Apache-2.0.txt and THIRD_PARTY_NOTICES.md.
 // The JSON wire format is specific to this package and is serialized by
 // upstream Glaze on the native side.
 

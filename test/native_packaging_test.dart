@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2026 Jian De jiande2020@gmail.com. All rights reserved.
+ *
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
+ */
+
 @Timeout(Duration(minutes: 3))
 library;
 
@@ -17,17 +24,28 @@ void main() {
     ..remove('LD_LIBRARY_PATH')
     ..remove('SKIP_NATIVE_BUILD');
 
-  Future<ProcessResult> run(String command, List<String> arguments) =>
-      Process.run(
-        command,
-        arguments,
-        workingDirectory: root,
-        environment: environment,
-        includeParentEnvironment: false,
-      );
+  Future<ProcessResult> run(
+    String command,
+    List<String> arguments, {
+    String? workingDirectory,
+  }) => Process.run(
+    command,
+    arguments,
+    workingDirectory: workingDirectory ?? root,
+    environment: environment,
+    includeParentEnvironment: false,
+  );
 
-  Future<void> mustRun(String command, List<String> arguments) async {
-    final result = await run(command, arguments);
+  Future<void> mustRun(
+    String command,
+    List<String> arguments, {
+    String? workingDirectory,
+  }) async {
+    final result = await run(
+      command,
+      arguments,
+      workingDirectory: workingDirectory,
+    );
     expect(result.exitCode, 0, reason: '${result.stdout}\n${result.stderr}');
   }
 
@@ -175,7 +193,89 @@ set(CMAKE_CXX_COMPILER c++)
     expect(result.exitCode, isNot(0));
     expect(
       '${result.stdout}\n${result.stderr}',
-      contains('The Native Assets hook supports native compilation only'),
+      contains('requires hooks.user_defines.pipewire_telephony_native.'),
     );
+  });
+
+  test('the Native Assets hook forwards a cross toolchain', () async {
+    final help = await run('dart', ['build', 'cli', '--help']);
+    if (!help.stdout.toString().contains('--target-arch')) {
+      markTestSkipped('This Dart CLI cannot request a foreign target.');
+      return;
+    }
+    final target = Architecture.current == Architecture.arm64 ? 'x64' : 'arm64';
+    final processor = target == 'arm64' ? 'aarch64' : 'x86_64';
+    final workspace = await Directory('${scratch.path}/cross-hook').create();
+    await Directory('${workspace.path}/bin').create();
+    await File('${workspace.path}/toolchain.cmake').writeAsString('''
+set(CMAKE_SYSTEM_NAME Linux)
+set(CMAKE_SYSTEM_PROCESSOR $processor)
+set(CMAKE_SYSROOT /)
+set(CMAKE_C_COMPILER cc)
+set(CMAKE_CXX_COMPILER c++)
+''');
+    await File('${workspace.path}/pubspec.yaml').writeAsString('''
+name: pwt_cross_hook_test
+environment:
+  sdk: '>=3.10.1 <4.0.0'
+dependencies:
+  pipewire_telephony_native:
+    path: $root
+hooks:
+  user_defines:
+    pipewire_telephony_native:
+      cmake_toolchain_file: toolchain.cmake
+''');
+    await File('${workspace.path}/bin/main.dart').writeAsString('''
+import 'package:pipewire_telephony_native/pipewire_telephony_native.dart';
+
+void main() => print(PipeWireBus.system);
+''');
+    await mustRun('dart', ['pub', 'get'], workingDirectory: workspace.path);
+    final result = await run('dart', [
+      'build',
+      'cli',
+      '--target',
+      'bin/main.dart',
+      '--target-arch',
+      target,
+      '--output',
+      '${workspace.path}/output',
+    ], workingDirectory: workspace.path);
+    final output = '${result.stdout}\n${result.stderr}';
+    expect(result.exitCode, isNot(0));
+    expect(output, isNot(contains('requires hooks.user_defines')));
+    expect(output, contains('ELF machine'));
+  });
+
+  test('the Native Assets hook accepts an explicit skip user define', () async {
+    final workspace = await Directory('${scratch.path}/skip-hook').create();
+    await Directory('${workspace.path}/bin').create();
+    await File('${workspace.path}/pubspec.yaml').writeAsString('''
+name: pwt_skip_hook_test
+environment:
+  sdk: '>=3.10.1 <4.0.0'
+dependencies:
+  pipewire_telephony_native:
+    path: $root
+hooks:
+  user_defines:
+    pipewire_telephony_native:
+      skip_native_build: true
+''');
+    await File('${workspace.path}/bin/main.dart').writeAsString('''
+import 'package:pipewire_telephony_native/pipewire_telephony_native.dart';
+
+void main() => print(PipeWireBus.system);
+''');
+    await mustRun('dart', ['pub', 'get'], workingDirectory: workspace.path);
+    await mustRun('dart', [
+      'build',
+      'cli',
+      '--target',
+      'bin/main.dart',
+      '--output',
+      '${workspace.path}/output',
+    ], workingDirectory: workspace.path);
   });
 }

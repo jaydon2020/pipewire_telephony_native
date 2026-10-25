@@ -1,8 +1,10 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Joel Winarske <joel.winarske@gmail.com>
+// SPDX-FileCopyrightText: 2026 Jian De
+
 // FFI allocation and handle-lifetime patterns are adapted from
-// https://github.com/jwinarske/bluez_native/blob/main/lib/src/ffi/bindings.dart.
-// Derived portions are Copyright 2026 Joel Winarske under Apache-2.0; see
-// LICENSES/Apache-2.0.txt. Subsequent modifications are Copyright 2026
-// Jian De under the package's BSD-3-Clause license.
+// https://github.com/jwinarske/bluez_native/blob/main/lib/src/ffi/bindings.dart
+// under Apache-2.0; see LICENSES/Apache-2.0.txt and THIRD_PARTY_NOTICES.md.
 
 import 'dart:convert';
 import 'dart:ffi';

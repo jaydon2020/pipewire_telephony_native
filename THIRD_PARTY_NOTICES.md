@@ -1,8 +1,10 @@
 # Third-party notices and redistribution
 
-The package's own code is BSD-3-Clause, as stated in [LICENSE](LICENSE).
+Unless a file says otherwise, `pipewire_telephony_native` is Copyright (c) 2026
+Jian De and is distributed under the BSD 3-Clause License in [LICENSE](LICENSE).
 Bundled and derived code keeps the following licenses. The top-level license
-does not replace them.
+does not replace them. Files carrying an `SPDX-License-Identifier: Apache-2.0`
+header are licensed as stated in that header.
 
 | Component and source | Use | Copyright and retained terms |
 | --- | --- | --- |
@@ -12,7 +14,7 @@ does not replace them.
 | [GoogleTest 1.17.0](https://github.com/google/googletest/tree/52eb8108c5bdec04579160ae17225d66034bd723), commit `52eb8108c5bdec04579160ae17225d66034bd723` | Native tests only; not linked into the released library | Copyright Google Inc. and contributors; [BSD-3-Clause](native/third_party/googletest/LICENSE) |
 | [Flutter Linux application templates](https://github.com/flutter/flutter/tree/d3b14c876900e553bc736ca19295fc09e3853e8e/packages/flutter_tools/templates/app/linux.tmpl), revision `d3b14c876900e553bc736ca19295fc09e3853e8e` | Basis of the example application's Linux runner and CMake files; generated registrant files are emitted by Flutter tooling | Copyright 2014 The Flutter Authors; [BSD-3-Clause](LICENSES/Flutter-BSD-3-Clause.txt) |
 | [PipeWire telephony API](https://github.com/PipeWire/pipewire/blob/master/spa/plugins/bluez5/README-Telephony.md) | Source specification for the `org.pipewire.Telephony` interfaces represented by the checked-in proxy headers | Copyright 2018 Wim Taymans and PipeWire contributors; [MIT](LICENSES/PipeWire-MIT.txt) |
-| [bluez_native](https://github.com/jwinarske/bluez_native) and [appstream_dart](https://github.com/meta-flutter/appstream_dart) | Derived build-hook, library-loader, FFI lifetime, codec/type organization, and development-script patterns, identified in the affected source files and the README | Copyright 2026 Joel Winarske; [Apache-2.0](LICENSES/Apache-2.0.txt) |
+| [bluez_native](https://github.com/jwinarske/bluez_native) and [appstream_dart](https://github.com/meta-flutter/appstream_dart) | Derived build-hook, library-loader, FFI lifetime, client lifecycle, codec/type organization, native CMake/sdbus-c++ subproject configuration, and development-script patterns. Adapted files carry `SPDX-License-Identifier: Apache-2.0` headers (`hook/build.dart`, `lib/src/ffi/{bindings,codec,types}.dart`, `lib/src/internal/library_loader.dart`, `lib/src/pipewire_telephony_client.dart`, `scripts/{asan,tsan,clang_format,clang_tidy,coverage}.sh`). The loader and build-hook pattern reached this project from appstream_dart through bluez_native. Substantial project-specific changes are Copyright 2026 Jian De | Copyright 2026 Joel Winarske; [Apache-2.0](LICENSES/Apache-2.0.txt) |
 
 Glaze 8.3.0 includes these separately attributed implementations in its header
 tree. Their notices remain in the named source files:

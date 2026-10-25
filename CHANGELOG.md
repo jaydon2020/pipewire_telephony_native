@@ -5,6 +5,8 @@
   ambient loaded-library and working-directory discovery.
 * Reject cross-architecture Native Assets requests and validate native CMake
   output architecture/ABI before reporting build success.
+* Support Native Assets cross-builds through an explicit, dependency-tracked
+  CMake toolchain file while preserving the validated AGL prebuilt path.
 * Expand retained third-party copyright, license, and source provenance for
   vendored code, generated inputs, and Flutter templates.
 * Discover PipeWire Bluetooth HFP gateways, calls, and optional SCO transports.

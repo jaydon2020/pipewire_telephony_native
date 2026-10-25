@@ -1,9 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Joel Winarske <joel.winarske@gmail.com>
+// SPDX-FileCopyrightText: 2026 Jian De
+
 // Dart models for the versioned PipeWire telephony FFI protocol.
 //
 // The FFI type organization is adapted from
 // https://github.com/jwinarske/bluez_native under Apache-2.0; see
-// LICENSES/Apache-2.0.txt. Derived portions are Copyright 2026 Joel Winarske;
-// subsequent modifications are Copyright 2026 Jian De under BSD-3-Clause.
+// LICENSES/Apache-2.0.txt and THIRD_PARTY_NOTICES.md.
 // These models mirror this package's native Glaze JSON types rather than
 // bluez_native's binary payloads.
 

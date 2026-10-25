@@ -41,8 +41,41 @@ A toolchain label alone is insufficient: a host-built x86-64 library labelled
 as AArch64 fails the build. Host `readelf` and `nm` (binutils) must be available;
 validation never executes a target binary.
 
-The Native Assets hook only builds for the host's architecture. For cross-built
-AGL applications set `SKIP_NATIVE_BUILD=1` and use the explicit target-built
-library integration above rather than requesting a foreign architecture from
-the hook. Source/prebuilt deployments load from declared assets or known
+## Native Assets cross-build
+
+An application can ask the package hook to compile directly for its Linux
+target by adding the toolchain path to the application or workspace pubspec:
+
+```yaml
+hooks:
+  user_defines:
+    pipewire_telephony_native:
+      cmake_toolchain_file: /absolute/path/to/agl-toolchain.cmake
+```
+
+Relative paths are resolved from that pubspec. The file must be a CMake
+toolchain that sets `CMAKE_SYSTEM_NAME`, `CMAKE_SYSTEM_PROCESSOR`, a target
+compiler and `CMAKE_SYSROOT`, and makes target `libsystemd` discoverable by
+pkg-config. Native Assets hooks run in a semi-hermetic environment, so AGL/Yocto
+variables such as `SDKTARGETSYSROOT` and `PKG_CONFIG_SYSROOT_DIR` are not passed
+through automatically. Use a self-contained wrapper toolchain that sets the
+required paths (including pkg-config environment values) before including the
+SDK's `OEToolchainConfig.cmake`.
+
+The hook registers the toolchain as a build dependency, requires CMake to
+report a cross-build with a sysroot, and checks that the final ELF matches the
+Native Assets target architecture. This path never executes a target binary.
+
+The standalone `scripts/build_agl.sh` and validated prebuilt integration remain
+available when the application build cannot provide a self-contained toolchain.
+For that path, disable the package hook explicitly in the application pubspec:
+
+```yaml
+hooks:
+  user_defines:
+    pipewire_telephony_native:
+      skip_native_build: true
+```
+
+Source and prebuilt deployments load from declared assets or known
 application-bundle locations; set `PWT_NATIVE_LIB` explicitly for other layouts.

@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2026 Jian De jiande2020@gmail.com. All rights reserved.
+ *
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
+ */
+
 /// A local protocol, connection, or remote D-Bus failure.
 final class PipeWireTelephonyException implements Exception {
   /// Creates an error preserving the failing operation and D-Bus error name.

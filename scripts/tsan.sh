@@ -1,4 +1,11 @@
 #!/bin/bash
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Joel Winarske <joel.winarske@gmail.com>
+# SPDX-FileCopyrightText: 2026 Jian De
+
+# ThreadSanitizer variant of scripts/asan.sh, which is patterned after
+# https://github.com/jwinarske/bluez_native/blob/main/scripts/asan.sh.
+# Adapted from bluez_native; see THIRD_PARTY_NOTICES.md.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

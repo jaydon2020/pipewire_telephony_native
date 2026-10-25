@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2026 Jian De jiande2020@gmail.com. All rights reserved.
+ *
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
+ */
+
 /// D-Bus scope used to find `org.pipewire.Telephony`.
 ///
 /// [automatic] checks the current process's session bus first, then its system

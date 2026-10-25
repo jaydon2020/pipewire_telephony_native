@@ -1,8 +1,10 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Joel Winarske <joel.winarske@gmail.com>
+// SPDX-FileCopyrightText: 2026 Jian De
+
 // Client lifecycle and event-routing patterns are adapted from
-// https://github.com/jwinarske/bluez_native/blob/main/lib/src/bluez_client.dart.
-// Derived portions are Copyright 2026 Joel Winarske under Apache-2.0; see
-// LICENSES/Apache-2.0.txt. Subsequent modifications are Copyright 2026
-// Jian De under the package's BSD-3-Clause license.
+// https://github.com/jwinarske/bluez_native/blob/main/lib/src/bluez_client.dart
+// under Apache-2.0; see LICENSES/Apache-2.0.txt and THIRD_PARTY_NOTICES.md.
 
 import 'dart:async';
 import 'dart:ffi';
