@@ -34,3 +34,15 @@ Use a submodule-aware fetch (`gitsm`) or include the pinned submodule contents i
 the source archive. Glaze is already supplied as its pinned header-only tree.
 Neither CMake path runs Git or accesses the network. Keep host and target build
 directories separate; never pass a host artifact as `PWT_PREBUILT_LIBRARY`.
+
+All native CMake builds validate their completed shared library against
+`CMAKE_SYSTEM_PROCESSOR`, including ELF class/machine, SONAME and public ABI.
+A toolchain label alone is insufficient: a host-built x86-64 library labelled
+as AArch64 fails the build. Host `readelf` and `nm` (binutils) must be available;
+validation never executes a target binary.
+
+The Native Assets hook only builds for the host's architecture. For cross-built
+AGL applications set `SKIP_NATIVE_BUILD=1` and use the explicit target-built
+library integration above rather than requesting a foreign architecture from
+the hook. Source/prebuilt deployments load from declared assets or known
+application-bundle locations; set `PWT_NATIVE_LIB` explicitly for other layouts.

@@ -2,7 +2,6 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ARCHIVE_REF="${PWT_ARCHIVE_REF:-HEAD}"
 TEMP_DIR="$(mktemp -d)"
 trap 'rm -rf "${TEMP_DIR}"' EXIT
 
@@ -35,13 +34,39 @@ done
 unset PWT_NATIVE_LIB
 (cd "${TEMP_DIR}" && "${BUNDLE}/load_bundled_library" "${sibling_libraries[@]}")
 
+# Use pub's own file selection, including .pubignore and submodule contents.
+if ! dart pub --verbose publish --dry-run > "${TEMP_DIR}/publish.log" 2>&1; then
+  tail -n 60 "${TEMP_DIR}/publish.log"
+  exit 1
+fi
+awk -v root="${ROOT_DIR}/" '
+  /^FINE: Creating \.tar\.gz stream containing:/ { copying = 1; next }
+  copying && /^    \| / {
+    path = substr($0, 7)
+    if (index(path, root) == 1) path = substr(path, length(root) + 1)
+    sub(/^\.\//, "", path)
+    if (path ~ /^\// || path ~ /(^|\/)\.\.(\/|$)/) exit 1
+    print path
+    next
+  }
+  copying { exit }
+  END { if (!copying) exit 1 }
+' "${TEMP_DIR}/publish.log" > "${TEMP_DIR}/files"
+test -s "${TEMP_DIR}/files"
 mkdir -p "${TEMP_DIR}/archive"
-git archive "${ARCHIVE_REF}" | tar -x -C "${TEMP_DIR}/archive"
-mkdir -p "${TEMP_DIR}/archive/native/third_party/sdbus-cpp"
-git -C native/third_party/sdbus-cpp archive HEAD | \
-  tar -x -C "${TEMP_DIR}/archive/native/third_party/sdbus-cpp"
-cmake -S "${TEMP_DIR}/archive/native" -B "${TEMP_DIR}/archive-build" \
-  -GNinja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
-  -DPWT_BUILD_DART_INTEGRATION_TESTS=OFF
-cmake --build "${TEMP_DIR}/archive-build" --parallel
-test -f "${TEMP_DIR}/archive-build/libpipewire_telephony_native.so"
+# Listed directories must not recursively reintroduce excluded files.
+tar --no-recursion --verbatim-files-from -T "${TEMP_DIR}/files" -cf - | \
+  tar -xf - -C "${TEMP_DIR}/archive"
+for excluded in task.md ARCHITECTURE.md .git .dart_tool build coverage; do
+  if [[ -e "${TEMP_DIR}/archive/${excluded}" ]]; then
+    echo "Excluded local path was packaged: ${excluded}" >&2
+    exit 1
+  fi
+done
+(cd "${TEMP_DIR}/archive" && flutter pub get)
+(cd "${TEMP_DIR}/archive" && dart build cli \
+  --target test/support/load_bundled_library.dart \
+  --output "${TEMP_DIR}/archive-cli")
+(cd "${TEMP_DIR}" && \
+  "${TEMP_DIR}/archive-cli/bundle/bin/load_bundled_library")
+tail -n 6 "${TEMP_DIR}/publish.log"

@@ -1,5 +1,6 @@
 #!/bin/bash
 set -euo pipefail
+export LC_ALL=C
 
 library="${1:?usage: validate_native_library.sh LIBRARY EXPECTED_ELF_MACHINE}"
 expected_machine="${2:?usage: validate_native_library.sh LIBRARY EXPECTED_ELF_MACHINE}"
@@ -13,9 +14,21 @@ expected_machine="${2:?usage: validate_native_library.sh LIBRARY EXPECTED_ELF_MA
   exit 1
 }
 
-machine="$(readelf -h "${library}" | sed -n 's/^  Machine:[[:space:]]*//p')"
+header="$(readelf -h "${library}")"
+machine="$(sed -n 's/^  Machine:[[:space:]]*//p' <<<"${header}")"
 [[ "${machine}" == "${expected_machine}" ]] || {
   echo "ELF machine is '${machine}', expected '${expected_machine}'" >&2
+  exit 1
+}
+
+case "${expected_machine}" in
+  'Advanced Micro Devices X86-64'|AArch64|RISC-V) expected_class=ELF64 ;;
+  'Intel 80386'|ARM) expected_class=ELF32 ;;
+  *) echo "unsupported ELF machine: ${expected_machine}" >&2; exit 1 ;;
+esac
+elf_class="$(sed -n 's/^  Class:[[:space:]]*//p' <<<"${header}")"
+[[ "${elf_class}" == "${expected_class}" ]] || {
+  echo "ELF class is '${elf_class}', expected '${expected_class}'" >&2
   exit 1
 }
 

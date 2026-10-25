@@ -22,6 +22,10 @@ void main(List<String> args) async {
     }
 
     validateOperatingSystems(OS.current, input.config.code.targetOS);
+    validateArchitectures(
+      Architecture.current,
+      input.config.code.targetArchitecture,
+    );
 
     final packageRoot = input.packageRoot.toFilePath();
     final nativeRoot = '${packageRoot}native';
@@ -89,10 +93,14 @@ void main(List<String> args) async {
         '.cmake',
         '.txt',
         '.in',
+        '.map',
       ].any(entity.path.endsWith)) {
         output.dependencies.add(entity.uri);
       }
     }
+    output.dependencies.add(
+      input.packageRoot.resolve('scripts/validate_native_library.sh'),
+    );
 
     stderr.writeln('libpipewire_telephony_native built: ${library.path}');
   });
@@ -119,6 +127,17 @@ void validateOperatingSystems(OS hostOS, OS targetOS) {
   if (hostOS != OS.linux || targetOS != OS.linux) {
     throw UnsupportedError(
       'pipewire_telephony_native requires a Linux host and target.',
+    );
+  }
+}
+
+void validateArchitectures(Architecture host, Architecture target) {
+  if (host != target) {
+    throw UnsupportedError(
+      'The Native Assets hook supports native compilation only '
+      '(host: $host, target: $target). For AGL cross-builds, build with the '
+      'target toolchain and use SKIP_NATIVE_BUILD=1 with the validated '
+      'prebuilt integration described in doc/agl_build.md.',
     );
   }
 }

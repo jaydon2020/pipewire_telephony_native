@@ -45,6 +45,20 @@ void main() {
     );
   });
 
+  test('matching host and target architectures are accepted', () {
+    expect(
+      () => hook.validateArchitectures(Architecture.arm64, Architecture.arm64),
+      returnsNormally,
+    );
+  });
+
+  test('cross-architecture Native Assets builds are rejected', () {
+    expect(
+      () => hook.validateArchitectures(Architecture.x64, Architecture.arm64),
+      throwsUnsupportedError,
+    );
+  });
+
   test('the bundled Native Asset loads through the public client', () async {
     final client = PipeWireTelephonyClient(bus: PipeWireBus.session);
     await client.close();

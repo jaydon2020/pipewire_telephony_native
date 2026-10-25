@@ -31,17 +31,6 @@ external Pointer<Char> _nativeLibraryPath();
   }
 
   try {
-    return (DynamicLibrary.open(_libraryName), _libraryName);
-  } on ArgumentError {
-    // Continue with paths that survive relocated Flutter bundles.
-  }
-
-  final sibling = _findLoadedLibrarySibling();
-  if (sibling != null) {
-    return (DynamicLibrary.open(sibling), sibling);
-  }
-
-  try {
     final pointer = _nativeLibraryPath();
     if (pointer != nullptr) {
       final path = pointer.cast<Utf8>().toDartString();
@@ -54,8 +43,8 @@ external Pointer<Char> _nativeLibraryPath();
   final executableDirectory = File(Platform.resolvedExecutable).parent.path;
   for (final path in [
     '$executableDirectory/lib/$_libraryName',
+    '$executableDirectory/../lib/$_libraryName',
     '$executableDirectory/$_libraryName',
-    '${Directory.current.path}/build/native/$_libraryName',
   ]) {
     if (File(path).existsSync()) {
       final absolute = File(path).absolute.path;
@@ -65,22 +54,4 @@ external Pointer<Char> _nativeLibraryPath();
   throw StateError(
     'Failed to load $_libraryName. Set PWT_NATIVE_LIB to its absolute path.',
   );
-}
-
-String? _findLoadedLibrarySibling() {
-  try {
-    final directories = <String>{};
-    for (final line in File('/proc/self/maps').readAsLinesSync()) {
-      final path = line.substring(line.lastIndexOf(' ') + 1).trim();
-      if (!path.startsWith('/')) continue;
-      final directory = File(path).parent.path;
-      if (directories.add(directory)) {
-        final candidate = '$directory/$_libraryName';
-        if (File(candidate).existsSync()) return candidate;
-      }
-    }
-  } on FileSystemException {
-    return null;
-  }
-  return null;
 }

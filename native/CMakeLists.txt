@@ -19,6 +19,22 @@ if(PWT_REQUIRE_CROSS_COMPILE)
   endif()
 endif()
 
+string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" pwt_processor)
+if(pwt_processor MATCHES "^(aarch64|arm64)$")
+  set(pwt_elf_machine "AArch64")
+elseif(pwt_processor MATCHES "^(x86_64|amd64)$")
+  set(pwt_elf_machine "Advanced Micro Devices X86-64")
+elseif(pwt_processor MATCHES "^(i[3-6]86|x86)$")
+  set(pwt_elf_machine "Intel 80386")
+elseif(pwt_processor MATCHES "^arm")
+  set(pwt_elf_machine "ARM")
+elseif(pwt_processor MATCHES "^riscv64")
+  set(pwt_elf_machine "RISC-V")
+else()
+  message(FATAL_ERROR
+    "Unsupported Linux target processor: ${CMAKE_SYSTEM_PROCESSOR}")
+endif()
+
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -96,6 +112,16 @@ if(UNIX AND NOT APPLE)
     "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/exports.map"
   )
 endif()
+
+set(pwt_validator
+  "${CMAKE_CURRENT_SOURCE_DIR}/../scripts/validate_native_library.sh")
+set_property(TARGET pipewire_telephony_native APPEND PROPERTY
+  LINK_DEPENDS "${pwt_validator}" "${CMAKE_CURRENT_SOURCE_DIR}/exports.map")
+add_custom_command(TARGET pipewire_telephony_native POST_BUILD
+  COMMAND "${pwt_validator}"
+    "$<TARGET_FILE:pipewire_telephony_native>" "${pwt_elf_machine}"
+  VERBATIM
+)
 
 if(BUILD_TESTING)
   enable_testing()

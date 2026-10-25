@@ -42,25 +42,18 @@ jobs:
       - run: flutter pub get
         working-directory: example/flutter_telephony
       - name: Install native dependencies
-        run: sudo apt-get update && sudo apt-get install -y libsystemd-dev ninja-build clang clang-format clang-tidy lcov
-      - run: cmake -S native -B build/native -GNinja -DBUILD_TESTING=ON
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsystemd-dev libexpat1-dev libgtk-3-dev ninja-build clang clang-format clang-tidy lcov binutils cmake pkg-config dbus python3-dbus python3-gi
+      - run: cmake -S native -B build/native -GNinja -DBUILD_TESTING=ON -DPYTHON3_EXECUTABLE=/usr/bin/python3
       - run: cmake --build build/native --parallel
       - run: ctest --test-dir build/native --output-on-failure
-      - run: dart test test/build_hook_test.dart test/codec_test.dart
+      - run: dart test test/build_hook_test.dart test/codec_test.dart test/native_packaging_test.dart
       - run: scripts/clang_format.sh check
       - run: scripts/clang_tidy.sh build/native
       - run: scripts/coverage.sh
       - run: scripts/verify_agl_packaging.sh
 
-  generated-proxies:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - name: Install generator dependencies
-        run: sudo apt-get update && sudo apt-get install -y libsystemd-dev libexpat1-dev ninja-build
-      - run: cmake -S native/third_party/sdbus-cpp -B build-codegen -GNinja -DSDBUSCPP_BUILD_CODEGEN=ON -DSDBUSCPP_BUILD_TESTS=OFF -DSDBUSCPP_INSTALL=OFF
+      - run: cmake -S native/third_party/sdbus-cpp -B build-codegen -GNinja -DSDBUSCPP_BUILD_CODEGEN=ON -DSDBUSCPP_BUILD_DOCS=OFF -DSDBUSCPP_BUILD_TESTS=OFF -DSDBUSCPP_INSTALL=OFF
       - run: cmake --build build-codegen --target sdbus-c++-xml2cpp --parallel
-      - run: scripts/generate_proxies.sh
-      - run: git diff --exit-code native/generated
+      - run: scripts/verify_host_package.sh

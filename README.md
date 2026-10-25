@@ -30,6 +30,16 @@ Set `SKIP_NATIVE_BUILD=1` only when an integration such as the AGL recipe builds
 and installs the native library separately. The existing Flutter Linux CMake
 path remains supported for those deployments.
 
+The hook supports a Linux target matching the host architecture. For AGL
+cross-builds, use the target toolchain/prebuilt instructions below. Every native
+CMake build checks the output ELF machine/class and public ABI using `readelf`
+and `nm` (binutils); a foreign architecture cannot be supplied by a host compiler.
+
+Runtime loading prefers the declared native asset, then known executable-relative
+bundle locations for legacy deployments. It never searches the working directory
+or directories belonging to unrelated loaded libraries. For a deliberate local
+development override, set `PWT_NATIVE_LIB` to an absolute shared-library path.
+
 ## Dart API
 
 The default is `PipeWireBus.automatic`: it checks the current process's session
@@ -122,6 +132,13 @@ cmake --build build/native
 ctest --test-dir build/native --output-on-failure
 ./scripts/verify_host_package.sh
 ```
+
+The packaging check requires a clean, publication-ready checkout, the pinned
+`sdbus-c++-xml2cpp` generator, and Flutter Linux desktop build prerequisites.
+It checks regenerated bindings/proxies, a relocated Flutter bundle, and a CLI
+rebuilt from pub's selected publication files. CI runs this check plus native
+loading and architecture regression tests; Python signal fixtures use system
+Python with `python3-dbus` and `python3-gi` installed.
 
 Native integration tests create a private D-Bus daemon and never issue call
 commands to the production bus.
