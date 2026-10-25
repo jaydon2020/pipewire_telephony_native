@@ -7,11 +7,8 @@ trap 'rm -rf "${TEMP_DIR}"' EXIT
 
 cd "${ROOT_DIR}"
 cp lib/src/ffi/bindings_generated.dart "${TEMP_DIR}/bindings_generated.dart"
-cp -r native/generated "${TEMP_DIR}/generated"
 dart run ffigen --config ffigen.yaml
-"${ROOT_DIR}/scripts/generate_proxies.sh"
 diff -u "${TEMP_DIR}/bindings_generated.dart" lib/src/ffi/bindings_generated.dart
-diff -ru "${TEMP_DIR}/generated" native/generated
 
 (cd example/flutter_telephony && flutter build linux --debug)
 BUNDLE="${ROOT_DIR}/example/flutter_telephony/build/linux/x64/debug/bundle"
@@ -60,6 +57,23 @@ tar --no-recursion --verbatim-files-from -T "${TEMP_DIR}/files" -cf - | \
 for excluded in task.md ARCHITECTURE.md .git .dart_tool build coverage; do
   if [[ -e "${TEMP_DIR}/archive/${excluded}" ]]; then
     echo "Excluded local path was packaged: ${excluded}" >&2
+    exit 1
+  fi
+done
+for required_notice in \
+  LICENSE \
+  THIRD_PARTY_NOTICES.md \
+  LICENSES/Apache-2.0.txt \
+  LICENSES/Flutter-BSD-3-Clause.txt \
+  LICENSES/PipeWire-MIT.txt \
+  LICENSES/zmij-MIT.txt \
+  native/third_party/dart/LICENSE \
+  native/third_party/glaze/LICENSE \
+  native/third_party/googletest/LICENSE \
+  native/third_party/sdbus-cpp/COPYING \
+  native/third_party/sdbus-cpp/COPYING-LGPL-Exception; do
+  if [[ ! -f "${TEMP_DIR}/archive/${required_notice}" ]]; then
+    echo "Required notice was not packaged: ${required_notice}" >&2
     exit 1
   fi
 done

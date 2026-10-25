@@ -4,6 +4,40 @@ Flutter FFI access to PipeWire's Bluetooth HFP telephony D-Bus API on Linux.
 The package discovers audio gateways, calls, and SCO transports and covers the
 PipeWire 1.6.6 method and property surface through typed Dart objects.
 
+## Supported features
+
+| Area | Supported feature | Dart API / notes |
+| --- | --- | --- |
+| Platform | Linux Flutter and standalone Dart | Native Assets builds require the target architecture to match the host; AGL cross-builds use the documented prebuilt/toolchain path. |
+| D-Bus connection | Automatic, session, or system bus selection | `PipeWireBus.automatic`, `.session`, and `.system` |
+| Gateway discovery | Initial snapshot plus add, remove, and property-change events | `gateways`, `gatewayAdded`, `gatewayRemoved`, `gatewayChanged` |
+| Call discovery | Initial snapshot plus add, remove, and property-change events | `calls`, `callAdded`, `callRemoved`, `callChanged` |
+| SCO transport discovery | Optional transport discovery and live replacement/removal | `gateway.transport` and `transport.propertiesChanged` |
+| Lifecycle | Connection state, startup timeout, service-loss detection, and deterministic close | `connect()`, `state`, `stateChanged`, `lastError`, `close()` |
+| Refresh | Reload all objects or one gateway, call, or transport | `client.refresh()` and each object's `refresh()` |
+| Gateway properties | Bluetooth address and HFP speaker/microphone volumes | `address`, `speakerVolume`, `microphoneVolume` |
+| Dialing | Dial numbers containing `0-9`, `+`, `*`, `#`, `,`, or `A-D` | `gateway.dial()`; accepts 1-80 characters |
+| DTMF | Send `0-9`, `*`, `#`, or `A-D` tones | `gateway.sendTones()` |
+| Individual calls | Answer and hang up | `call.answer()`, `call.hangup()` |
+| All calls | Request termination of every call on a gateway | `gateway.hangupAll()` |
+| Multi-call control | Swap, release-and-answer, release-and-swap, and hold-and-answer | `swapCalls()`, `releaseAndAnswer()`, `releaseAndSwap()`, `holdAndAnswer()` |
+| Conference calls | Create a multiparty call when supported by the phone | `gateway.createMultiparty()` |
+| HFP volume control | Read and set speaker and microphone gain from 0 to 15 | `setSpeakerVolume()`, `setMicrophoneVolume()` |
+| Call metadata | Caller number, incoming line, name, and multiparty status | `lineIdentification`, `incomingLine`, `name`, `multiparty` |
+| Call states | Active, held, dialing, alerting, incoming, waiting, disconnected, and unknown future values | `call.state` and `call.rawState` |
+| SCO state | Error, idle, pending, active, and unknown future values; negotiated codec ID | `transport.state`, `rawState`, and `codec` |
+| SCO control | Activate SCO and allow or reject incoming SCO connections | `transport.activate()`, `transport.setRejectSco()` |
+| Error reporting | Local, connection, and remote D-Bus errors with operation, object path, and request ID | `PipeWireTelephonyException` preserves the remote error name. |
+| Object safety | Removed or replaced gateways, calls, and transports are invalidated | `isValid`; commands on stale objects throw `StateError`. |
+| Packaging | Native Assets, legacy Flutter Linux CMake bundles, and explicit development override | Declared assets are preferred; `PWT_NATIVE_LIB` is the deliberate override. |
+
+Pairing, trust, and Bluetooth profile connection remain BlueZ responsibilities.
+The package can activate and inspect SCO, but it does not route PCM audio or
+manage audio focus, microphones, or speakers; those remain WirePlumber/AGL
+application-policy responsibilities. Multi-call operations are exposed by the
+API but can still be rejected by the phone when its current call state does not
+permit them.
+
 ## Requirements
 
 - Linux with `org.pipewire.Telephony` available on D-Bus
@@ -133,12 +167,12 @@ ctest --test-dir build/native --output-on-failure
 ./scripts/verify_host_package.sh
 ```
 
-The packaging check requires a clean, publication-ready checkout, the pinned
-`sdbus-c++-xml2cpp` generator, and Flutter Linux desktop build prerequisites.
-It checks regenerated bindings/proxies, a relocated Flutter bundle, and a CLI
-rebuilt from pub's selected publication files. CI runs this check plus native
-loading and architecture regression tests; Python signal fixtures use system
-Python with `python3-dbus` and `python3-gi` installed.
+The packaging check requires a clean, publication-ready checkout and Flutter
+Linux desktop build prerequisites. It checks regenerated FFI bindings, compiles
+the checked-in sdbus-c++ proxy headers, exercises a relocated Flutter bundle,
+and rebuilds a CLI from pub's selected publication files. CI runs this check
+plus native loading and architecture regression tests; Python signal fixtures
+use system Python with `python3-dbus` and `python3-gi` installed.
 
 Native integration tests create a private D-Bus daemon and never issue call
 commands to the production bus.

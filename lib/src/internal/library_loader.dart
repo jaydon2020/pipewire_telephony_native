@@ -3,8 +3,9 @@
 // Search order adapted from https://github.com/jwinarske/bluez_native, which
 // is in turn patterned after
 // https://github.com/meta-flutter/appstream_dart/blob/main/lib/src/bindings.dart.
-// Both upstream projects are licensed under Apache-2.0; see
-// LICENSES/Apache-2.0.txt.
+// Derived portions are Copyright 2026 Joel Winarske and licensed under
+// Apache-2.0; see LICENSES/Apache-2.0.txt. Subsequent modifications are
+// Copyright 2026 Jian De and licensed under the package's BSD-3-Clause license.
 
 import 'dart:ffi';
 import 'dart:io';

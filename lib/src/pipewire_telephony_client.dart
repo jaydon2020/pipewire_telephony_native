@@ -1,3 +1,9 @@
+// Client lifecycle and event-routing patterns are adapted from
+// https://github.com/jwinarske/bluez_native/blob/main/lib/src/bluez_client.dart.
+// Derived portions are Copyright 2026 Joel Winarske under Apache-2.0; see
+// LICENSES/Apache-2.0.txt. Subsequent modifications are Copyright 2026
+// Jian De under the package's BSD-3-Clause license.
+
 import 'dart:async';
 import 'dart:ffi';
 import 'dart:isolate';

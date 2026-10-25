@@ -2,8 +2,10 @@
 //
 // The FFI type organization is adapted from
 // https://github.com/jwinarske/bluez_native under Apache-2.0; see
-// LICENSES/Apache-2.0.txt. These models mirror this package's native Glaze JSON
-// types rather than bluez_native's binary payloads.
+// LICENSES/Apache-2.0.txt. Derived portions are Copyright 2026 Joel Winarske;
+// subsequent modifications are Copyright 2026 Jian De under BSD-3-Clause.
+// These models mirror this package's native Glaze JSON types rather than
+// bluez_native's binary payloads.
 
 const pwtProtocolVersion = 1;
 const pwtMaxMessageBytes = 1024 * 1024;

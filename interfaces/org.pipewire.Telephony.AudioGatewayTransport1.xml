@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<node>
-  <interface name="org.pipewire.Telephony.AudioGatewayTransport1">
-    <method name="Activate"/>
-    <property name="State" type="s" access="read"/>
-    <property name="Codec" type="y" access="read"/>
-    <property name="RejectSCO" type="b" access="readwrite"/>
-  </interface>
-</node>

@@ -5,6 +5,8 @@
   ambient loaded-library and working-directory discovery.
 * Reject cross-architecture Native Assets requests and validate native CMake
   output architecture/ABI before reporting build success.
+* Expand retained third-party copyright, license, and source provenance for
+  vendored code, generated inputs, and Flutter templates.
 * Discover PipeWire Bluetooth HFP gateways, calls, and optional SCO transports.
 * Control calls, multi-call operations, DTMF, HFP volumes, and SCO activation.
 * Expose live property and lifecycle streams, stale-object checks, and D-Bus errors.

@@ -54,6 +54,4 @@ jobs:
       - run: scripts/coverage.sh
       - run: scripts/verify_agl_packaging.sh
 
-      - run: cmake -S native/third_party/sdbus-cpp -B build-codegen -GNinja -DSDBUSCPP_BUILD_CODEGEN=ON -DSDBUSCPP_BUILD_DOCS=OFF -DSDBUSCPP_BUILD_TESTS=OFF -DSDBUSCPP_INSTALL=OFF
-      - run: cmake --build build-codegen --target sdbus-c++-xml2cpp --parallel
       - run: scripts/verify_host_package.sh

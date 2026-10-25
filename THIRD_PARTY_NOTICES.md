@@ -4,13 +4,36 @@ The package's own code is BSD-3-Clause, as stated in [LICENSE](LICENSE).
 Bundled and derived code keeps the following licenses. The top-level license
 does not replace them.
 
-| Component | Use | License and retained text |
+| Component and source | Use | Copyright and retained terms |
 | --- | --- | --- |
-| sdbus-c++ 2.2.1, commit `28b78822cfc5fbec4bd9906168493e9985f586ed` | Statically linked into the native library | [LGPL-2.1](native/third_party/sdbus-cpp/COPYING) with the [sdbus-c++ exception](native/third_party/sdbus-cpp/COPYING-LGPL-Exception) |
-| Glaze 8.3.0 | Header-only JSON codec in the native library | [MIT](native/third_party/glaze/LICENSE) |
-| Dart SDK 3.13.2 API DL source and headers | Native Dart port integration | [BSD-3-Clause](native/third_party/dart/LICENSE) |
-| GoogleTest 1.17.0 | Native tests only; not linked into the released library | [BSD-3-Clause](native/third_party/googletest/LICENSE) |
-| [bluez_native](https://github.com/jwinarske/bluez_native) and [appstream_dart](https://github.com/meta-flutter/appstream_dart) | Derived build-hook, library-loader, FFI lifetime, codec/type organization, and development-script patterns, identified in source comments and the README | [Apache-2.0](LICENSES/Apache-2.0.txt) |
+| [sdbus-c++ 2.2.1](https://github.com/Kistler-Group/sdbus-cpp/tree/28b78822cfc5fbec4bd9906168493e9985f586ed), commit `28b78822cfc5fbec4bd9906168493e9985f586ed` | Statically linked into the native library; its `sdbus-c++-xml2cpp` tool produced the checked-in `native/generated/*.h` proxy headers | Copyright its authors, listed in [AUTHORS](native/third_party/sdbus-cpp/AUTHORS); [LGPL-2.1](native/third_party/sdbus-cpp/COPYING) with the [sdbus-c++ exception](native/third_party/sdbus-cpp/COPYING-LGPL-Exception) |
+| [Glaze 8.3.0](https://github.com/stephenberry/glaze/tree/dce5e0f7ec572725ec369a0bc59a00eeb2270a9a), commit `dce5e0f7ec572725ec369a0bc59a00eeb2270a9a` | Header-only JSON codec in the native library | Copyright 2019-present Stephen Berry; [MIT](native/third_party/glaze/LICENSE) with its object-code exception |
+| [Dart SDK 3.13.2](https://github.com/dart-lang/sdk/tree/60a57cd42d64dc03e9f07aa60a2e250755c1ef28/runtime/include) API DL source and headers, revision `60a57cd42d64dc03e9f07aa60a2e250755c1ef28` | Native Dart port integration | Copyright the Dart project authors; [BSD-3-Clause](native/third_party/dart/LICENSE) |
+| [GoogleTest 1.17.0](https://github.com/google/googletest/tree/52eb8108c5bdec04579160ae17225d66034bd723), commit `52eb8108c5bdec04579160ae17225d66034bd723` | Native tests only; not linked into the released library | Copyright Google Inc. and contributors; [BSD-3-Clause](native/third_party/googletest/LICENSE) |
+| [Flutter Linux application templates](https://github.com/flutter/flutter/tree/d3b14c876900e553bc736ca19295fc09e3853e8e/packages/flutter_tools/templates/app/linux.tmpl), revision `d3b14c876900e553bc736ca19295fc09e3853e8e` | Basis of the example application's Linux runner and CMake files; generated registrant files are emitted by Flutter tooling | Copyright 2014 The Flutter Authors; [BSD-3-Clause](LICENSES/Flutter-BSD-3-Clause.txt) |
+| [PipeWire telephony API](https://github.com/PipeWire/pipewire/blob/master/spa/plugins/bluez5/README-Telephony.md) | Source specification for the `org.pipewire.Telephony` interfaces represented by the checked-in proxy headers | Copyright 2018 Wim Taymans and PipeWire contributors; [MIT](LICENSES/PipeWire-MIT.txt) |
+| [bluez_native](https://github.com/jwinarske/bluez_native) and [appstream_dart](https://github.com/meta-flutter/appstream_dart) | Derived build-hook, library-loader, FFI lifetime, codec/type organization, and development-script patterns, identified in the affected source files and the README | Copyright 2026 Joel Winarske; [Apache-2.0](LICENSES/Apache-2.0.txt) |
+
+Glaze 8.3.0 includes these separately attributed implementations in its header
+tree. Their notices remain in the named source files:
+
+- [fast_float 8.0.2](https://github.com/fastfloat/fast_float), by Daniel
+  Lemire, João Paulo Magalhaes, and contributors, in
+  `native/third_party/glaze/include/glaze/util/fast_float.hpp`. Its complete
+  MIT, Apache-2.0, and Boost-1.0 alternatives are retained in that file.
+- [zmij](https://github.com/vitaut/zmij), copyright 2025-present Victor
+  Zverovich, adapted into
+  `native/third_party/glaze/include/glaze/util/zmij.hpp`. This distribution
+  selects its [MIT license](LICENSES/zmij-MIT.txt).
+- The `xxh64` implementation, copyright 2015 Daniel Kirchner, in
+  `native/third_party/glaze/include/glaze/api/xxh64.hpp`. Its full MIT notice
+  is retained in that file and it identifies the
+  [xxHash source](https://github.com/Cyan4973/xxHash).
+
+`native/generated/object_manager_proxy.h` represents the standard
+[D-Bus ObjectManager interface](https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces-objectmanager),
+not a vendored D-Bus implementation. `lib/src/ffi/bindings_generated.dart` is
+generated by `package:ffigen` from this package's own public C header.
 
 Dependency copyright notices are retained in the linked license files and source
 headers. The selected system D-Bus implementation (normally libsystemd) is a
