@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(pipewire_telephony_native_library VERSION 0.0.1 LANGUAGES C CXX)
+project(pipewire_telephony_native_library VERSION 0.1.0 LANGUAGES C CXX)
 
 option(PWT_BUILD_DART_INTEGRATION_TESTS
   "Run Dart tests that load the native shared library" ON)

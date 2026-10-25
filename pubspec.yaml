@@ -1,6 +1,6 @@
 name: pipewire_telephony_native
 description: Linux Flutter and Dart bindings for PipeWire Bluetooth HFP telephony, with gateway discovery, call control, and SCO transport state over D-Bus.
-version: 0.0.1
+version: 0.1.0
 repository: https://github.com/jaydon2020/pipewire_telephony_native
 issue_tracker: https://github.com/jaydon2020/pipewire_telephony_native/issues
 

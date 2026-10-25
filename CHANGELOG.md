@@ -1,4 +1,4 @@
-## 0.0.1
+## 0.1.0
 
 * Initial Linux release with Flutter FFI and Dart Native Assets builds.
 * Resolve native code from declared assets or application bundle paths; remove
@@ -7,6 +7,8 @@
   output architecture/ABI before reporting build success.
 * Support Native Assets cross-builds through an explicit, dependency-tracked
   CMake toolchain file while preserving the validated AGL prebuilt path.
+* Allow the AGL Flutter LLVM runtime dependencies `libc++.so.1` and
+  `libc++abi.so.1` in validated target libraries.
 * Expand retained third-party copyright, license, and source provenance for
   vendored code, generated inputs, and Flutter templates.
 * Discover PipeWire Bluetooth HFP gateways, calls, and optional SCO transports.

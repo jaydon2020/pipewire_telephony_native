@@ -145,6 +145,68 @@ void main() {
     expect(result.stderr, contains("ELF class is 'ELF32', expected 'ELF64'"));
   });
 
+  test(
+    'AGL LLVM runtimes are accepted but unknown dependencies are not',
+    () async {
+      final tools = await Directory('${scratch.path}/validator-tools').create();
+      final library = await File(
+        '${scratch.path}/libpipewire_telephony_native.so',
+      ).create();
+      final readelf = File('${tools.path}/readelf');
+      await readelf.writeAsString(r'''#!/bin/bash
+if [[ "$1" == "-h" ]]; then
+  printf '  Class:                             ELF64\n'
+  printf '  Machine:                           Advanced Micro Devices X86-64\n'
+else
+  printf ' 0x000000000000000e (SONAME)             Library soname: [libpipewire_telephony_native.so]\n'
+  printf ' 0x0000000000000001 (NEEDED)             Shared library: [libc++.so.1]\n'
+  printf ' 0x0000000000000001 (NEEDED)             Shared library: [libc++abi.so.1]\n'
+  if [[ -n "${PWT_TEST_EXTRA_DEPENDENCY:-}" ]]; then
+    printf ' 0x0000000000000001 (NEEDED)             Shared library: [%s]\n' "$PWT_TEST_EXTRA_DEPENDENCY"
+  fi
+fi
+''');
+      final nm = File('${tools.path}/nm');
+      await nm.writeAsString('''#!/bin/bash
+printf '%s\\n' \\
+  'pwt_abi_version T 0 0' \\
+  'pwt_client_create T 0 0' \\
+  'pwt_client_destroy T 0 0' \\
+  'pwt_client_start T 0 0' \\
+  'pwt_client_stop T 0 0' \\
+  'pwt_client_submit T 0 0' \\
+  'pwt_free T 0 0' \\
+  'pwt_initialize_dart_api_dl T 0 0' \\
+  'pwt_library_path T 0 0'
+''');
+      await mustRun('chmod', ['+x', readelf.path, nm.path]);
+
+      final originalPath = environment['PATH']!;
+      environment['PATH'] = '${tools.path}:$originalPath';
+      try {
+        final accepted = await run('$root/scripts/validate_native_library.sh', [
+          library.path,
+          'Advanced Micro Devices X86-64',
+        ]);
+        expect(accepted.exitCode, 0, reason: '${accepted.stderr}');
+
+        environment['PWT_TEST_EXTRA_DEPENDENCY'] = 'libunexpected.so.1';
+        final rejected = await run('$root/scripts/validate_native_library.sh', [
+          library.path,
+          'Advanced Micro Devices X86-64',
+        ]);
+        expect(rejected.exitCode, isNot(0));
+        expect(
+          rejected.stderr,
+          contains('unexpected direct runtime dependency: libunexpected.so.1'),
+        );
+      } finally {
+        environment['PATH'] = originalPath;
+        environment.remove('PWT_TEST_EXTRA_DEPENDENCY');
+      }
+    },
+  );
+
   test('a foreign processor label cannot hide a host-built ELF', () async {
     final processor = Architecture.current == Architecture.arm64
         ? 'x86_64'

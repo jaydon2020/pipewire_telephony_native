@@ -165,7 +165,7 @@ Cross-build and prebuilt packaging are documented in
 telephony on the system bus and grant the application user the destination's
 D-Bus policy. Do not run the application as root to bypass missing policy.
 
-The initial 0.0.1 package is verified on desktop Linux with private D-Bus mock
+The initial 0.1.0 package is verified on desktop Linux with private D-Bus mock
 services. Real-phone call flows, two-way audio and target-prebuilt equivalence
 still require validation on your AGL image; passing host tests does not establish
 those deployment results.

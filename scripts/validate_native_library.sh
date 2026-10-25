@@ -44,7 +44,8 @@ fi
 while IFS= read -r dependency; do
   case "${dependency}" in
     libc.so.*|libdl.so.*|libgcc_s.so.*|libm.so.*|libpthread.so.*|librt.so.*|\
-      libstdc++.so.*|libsystemd.so.*|ld-linux*.so.*) ;;
+      libc++.so.1|libc++abi.so.1|libstdc++.so.*|libsystemd.so.*|\
+      ld-linux*.so.*) ;;
     *)
       echo "unexpected direct runtime dependency: ${dependency}" >&2
       exit 1
