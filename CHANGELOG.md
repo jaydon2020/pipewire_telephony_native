@@ -9,6 +9,8 @@
   CMake toolchain file while preserving the validated AGL prebuilt path.
 * Allow the AGL Flutter LLVM runtime dependencies `libc++.so.1` and
   `libc++abi.so.1` in validated target libraries.
+* Resolve the native library beside a loaded Flutter `libapp.so` for AGL
+  homescreen deployments without `LD_LIBRARY_PATH`.
 * Expand retained third-party copyright, license, and source provenance for
   vendored code, generated inputs, and Flutter templates.
 * Discover PipeWire Bluetooth HFP gateways, calls, and optional SCO transports.

@@ -77,5 +77,6 @@ hooks:
       skip_native_build: true
 ```
 
-Source and prebuilt deployments load from declared assets or known
-application-bundle locations; set `PWT_NATIVE_LIB` explicitly for other layouts.
+Source and prebuilt deployments load from the system loader, beside a mapped
+Flutter `libapp.so`, from declared assets, or from known executable-relative
+application-bundle locations. Set `PWT_NATIVE_LIB` explicitly for other layouts.

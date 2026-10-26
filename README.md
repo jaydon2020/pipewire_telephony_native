@@ -29,7 +29,7 @@ PipeWire 1.6.6 method and property surface through typed Dart objects.
 | SCO control | Activate SCO and allow or reject incoming SCO connections | `transport.activate()`, `transport.setRejectSco()` |
 | Error reporting | Local, connection, and remote D-Bus errors with operation, object path, and request ID | `PipeWireTelephonyException` preserves the remote error name. |
 | Object safety | Removed or replaced gateways, calls, and transports are invalidated | `isValid`; commands on stale objects throw `StateError`. |
-| Packaging | Native Assets, legacy Flutter Linux CMake bundles, and explicit development override | Declared assets are preferred; `PWT_NATIVE_LIB` is the deliberate override. |
+| Packaging | Native Assets, AGL/legacy Flutter Linux bundles, and explicit development override | Bundle libraries beside loaded `libapp.so` are supported; `PWT_NATIVE_LIB` is the deliberate override. |
 
 Pairing, trust, and Bluetooth profile connection remain BlueZ responsibilities.
 The package can activate and inspect SCO, but it does not route PCM audio or
@@ -82,10 +82,14 @@ checks the output ELF machine/class and public ABI using
 `readelf` and `nm` (binutils); a foreign architecture cannot be supplied by a
 host compiler.
 
-Runtime loading prefers the declared native asset, then known executable-relative
-bundle locations for legacy deployments. It never searches the working directory
-or directories belonging to unrelated loaded libraries. For a deliberate local
-development override, set `PWT_NATIVE_LIB` to an absolute shared-library path.
+Runtime loading uses the system loader, then the directory containing a loaded
+Flutter `libapp.so`, then the declared native asset and known
+executable-relative bundle locations for legacy deployments. This supports AGL
+homescreen bundles whose launcher is outside the application and does not set
+`LD_LIBRARY_PATH`. It never searches the working directory or directories
+belonging to unrelated loaded libraries.
+For a deliberate local development override, set `PWT_NATIVE_LIB` to an absolute
+shared-library path.
 
 ## Dart API
 

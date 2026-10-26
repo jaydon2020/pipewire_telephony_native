@@ -86,6 +86,27 @@ void main() {
     },
   );
 
+  test('library beside a loaded libapp.so supports AGL homescreen', () async {
+    final binary = await Directory(
+      '${scratch.path}/homescreen/bin',
+    ).create(recursive: true);
+    final libraries = await Directory(
+      '${scratch.path}/homescreen/release/lib',
+    ).create(recursive: true);
+    final probe = await File(executable).copy('${binary.path}/flutter-auto');
+    final libapp = await File(
+      '$ambient/libfixture.so',
+    ).copy('${libraries.path}/libapp.so');
+    await File(
+      '$ambient/libpipewire_telephony_native.so',
+    ).copy('${libraries.path}/libpipewire_telephony_native.so');
+
+    final result = await run(probe.path, [libapp.path]);
+    expect(result.exitCode, 0, reason: '${result.stderr}');
+    expect(result.stdout, contains('AUDIT_UNTRUSTED_LIBRARY_LOADED'));
+    expect(result.stdout, contains('bundled telephony library loaded'));
+  });
+
   test('missing asset never falls back to the working directory', () async {
     final isolated = await Directory(
       '${scratch.path}/missing/bin',

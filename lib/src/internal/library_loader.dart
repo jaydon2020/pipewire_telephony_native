@@ -34,14 +34,30 @@ external Pointer<Char> _nativeLibraryPath();
     return (DynamicLibrary.open(override), override);
   }
 
+  final errors = <String>[];
+  try {
+    return (DynamicLibrary.open(_libraryName), _libraryName);
+  } catch (error) {
+    errors.add('dlopen($_libraryName): $error');
+  }
+
+  final sibling = _findSiblingOfLoadedLibrary(_libraryName);
+  if (sibling != null) {
+    try {
+      return (DynamicLibrary.open(sibling), sibling);
+    } catch (error) {
+      errors.add('dlopen($sibling): $error');
+    }
+  }
+
   try {
     final pointer = _nativeLibraryPath();
     if (pointer != nullptr) {
       final path = pointer.cast<Utf8>().toDartString();
       if (path.isNotEmpty) return (DynamicLibrary.open(path), path);
     }
-  } catch (_) {
-    // The Native Asset is optional for legacy Flutter CMake deployments.
+  } catch (error) {
+    errors.add('Native Asset resolution: $error');
   }
 
   final executableDirectory = File(Platform.resolvedExecutable).parent.path;
@@ -56,6 +72,36 @@ external Pointer<Char> _nativeLibraryPath();
     }
   }
   throw StateError(
-    'Failed to load $_libraryName. Set PWT_NATIVE_LIB to its absolute path.',
+    'Failed to load $_libraryName. Set PWT_NATIVE_LIB to its absolute path.\n'
+    'Errors:\n${errors.join('\n')}',
   );
+}
+
+/// Finds [libraryName] beside Flutter libraries already mapped by the embedder.
+String? _findSiblingOfLoadedLibrary(String libraryName) {
+  try {
+    final maps = File('/proc/self/maps');
+    if (!maps.existsSync()) return null;
+    final directories = <String>{};
+    for (final line in maps.readAsLinesSync()) {
+      final pathStart = line.indexOf('/');
+      if (pathStart < 0) continue;
+      var path = line.substring(pathStart).trim();
+      if (path.endsWith(' (deleted)')) {
+        path = path.substring(0, path.length - ' (deleted)'.length);
+      }
+      final file = File(path);
+      final basename = file.uri.pathSegments.last;
+      final directory = file.parent.path;
+      if (basename != 'libapp.so' && !basename.startsWith('libflutter_')) {
+        continue;
+      }
+      if (!directories.add(directory)) continue;
+      final candidate = '$directory/$libraryName';
+      if (File(candidate).existsSync()) return candidate;
+    }
+  } on FileSystemException {
+    return null;
+  }
+  return null;
 }
