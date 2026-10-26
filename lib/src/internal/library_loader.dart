@@ -41,7 +41,7 @@ external Pointer<Char> _nativeLibraryPath();
     errors.add('dlopen($_libraryName): $error');
   }
 
-  final sibling = _findSiblingOfLoadedLibrary(_libraryName);
+  final sibling = findSiblingOfLoadedLibrary(_libraryName);
   if (sibling != null) {
     try {
       return (DynamicLibrary.open(sibling), sibling);
@@ -58,6 +58,18 @@ external Pointer<Char> _nativeLibraryPath();
     }
   } catch (error) {
     errors.add('Native Asset resolution: $error');
+  }
+
+  final mappedSibling = findSiblingOfLoadedLibrary(
+    _libraryName,
+    flutterOnly: false,
+  );
+  if (mappedSibling != null) {
+    try {
+      return (DynamicLibrary.open(mappedSibling), mappedSibling);
+    } catch (error) {
+      errors.add('dlopen($mappedSibling): $error');
+    }
   }
 
   final executableDirectory = File(Platform.resolvedExecutable).parent.path;
@@ -78,12 +90,15 @@ external Pointer<Char> _nativeLibraryPath();
 }
 
 /// Finds [libraryName] beside Flutter libraries already mapped by the embedder.
-String? _findSiblingOfLoadedLibrary(String libraryName) {
+String? findSiblingOfLoadedLibrary(
+  String libraryName, {
+  String? maps,
+  bool flutterOnly = true,
+}) {
   try {
-    final maps = File('/proc/self/maps');
-    if (!maps.existsSync()) return null;
+    final contents = maps ?? File('/proc/self/maps').readAsStringSync();
     final directories = <String>{};
-    for (final line in maps.readAsLinesSync()) {
+    for (final line in contents.split('\n')) {
       final pathStart = line.indexOf('/');
       if (pathStart < 0) continue;
       var path = line.substring(pathStart).trim();
@@ -93,7 +108,9 @@ String? _findSiblingOfLoadedLibrary(String libraryName) {
       final file = File(path);
       final basename = file.uri.pathSegments.last;
       final directory = file.parent.path;
-      if (basename != 'libapp.so' && !basename.startsWith('libflutter_')) {
+      if (flutterOnly &&
+          basename != 'libapp.so' &&
+          !basename.startsWith('libflutter_')) {
         continue;
       }
       if (!directories.add(directory)) continue;

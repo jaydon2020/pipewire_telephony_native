@@ -12,6 +12,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:code_assets/code_assets.dart';
+import 'package:pipewire_telephony_native/src/internal/library_loader.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -105,6 +106,25 @@ void main() {
     expect(result.exitCode, 0, reason: '${result.stderr}');
     expect(result.stdout, contains('AUDIT_UNTRUSTED_LIBRARY_LOADED'));
     expect(result.stdout, contains('bundled telephony library loaded'));
+  });
+
+  test('falls back beside any mapped library when requested', () async {
+    final directory = await Directory(
+      '${scratch.path}/mapped-fallback',
+    ).create();
+    final library = await File(
+      '${directory.path}/libpipewire_telephony_native.so',
+    ).create();
+
+    final result = findSiblingOfLoadedLibrary(
+      library.uri.pathSegments.last,
+      maps:
+          '7f000000-7f001000 r-xp 00000000 00:00 0 '
+          '${directory.path}/libfixture.so\n',
+      flutterOnly: false,
+    );
+
+    expect(result, library.path);
   });
 
   test('missing asset never falls back to the working directory', () async {
