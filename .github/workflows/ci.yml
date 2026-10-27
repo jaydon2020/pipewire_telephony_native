@@ -1,66 +1,193 @@
 name: CI
 
 on:
-  push:
-  pull_request:
+  push:    { branches: [main, develop] }
+  pull_request: { branches: [main] }
+  workflow_call:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
+  test-dart:
+    name: Dart and Flutter tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable }
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build g++ pkg-config binutils libsystemd-dev
+      - run: flutter pub get
+      - run: dart test test/build_hook_test.dart test/codec_test.dart test/native_packaging_test.dart
+      - run: flutter pub get
+        working-directory: example/flutter_telephony
+      - run: flutter test
+        working-directory: example/flutter_telephony
+
+  package:
+    name: Archive, native bundle and relocated load
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable }
+      - name: Install package verification dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build g++ pkg-config binutils libsystemd-dev \
+            libclang-19-dev libgtk-3-dev
+      - run: flutter pub get
+      - run: flutter pub get
+        working-directory: example/flutter_telephony
+      - run: ./scripts/verify_host_package.sh
+
+  generated-bindings:
+    name: Generated Dart bindings
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable }
+      - name: Install libclang and native dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libclang-19-dev cmake ninja-build g++ pkg-config libsystemd-dev
+      - run: flutter pub get
+      - run: dart run ffigen --config ffigen.yaml
+      - run: git diff --exit-code -- lib/src/ffi/bindings_generated.dart
+
+  format:
+    name: Format check
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable }
+      - name: Install native format dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends clang-format-19
+      - run: flutter pub get
+      - run: dart format --output=none --set-exit-if-changed lib/ example/ hook/ test/
+      - run: CLANG_FORMAT=clang-format-19 ./scripts/clang_format.sh check
+
   analyze:
+    name: Analysis and pub dry-run
     runs-on: ubuntu-24.04
     strategy:
       matrix:
         flutter: [any, '3.38.1']
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+        with: { submodules: recursive }
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           flutter-version: ${{ matrix.flutter }}
       - run: flutter pub get
+      - run: dart pub publish --dry-run
+        if: matrix.flutter == 'any'
       - run: flutter pub get
         working-directory: example/flutter_telephony
       - run: flutter analyze --fatal-infos
-      - run: dart format --output=none --set-exit-if-changed lib hook test example
-        if: matrix.flutter == 'any'
 
-  native:
+  test-cpp:
+    name: C++ and integration tests
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+        with: { submodules: recursive }
       - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
+        with: { channel: stable }
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build clang-19 pkg-config libsystemd-dev \
+            dbus python3-dbus python3-gi
       - run: flutter pub get
       - run: flutter pub get
         working-directory: example/flutter_telephony
-      - name: Install native dependencies
+      - name: Build and test
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libsystemd-dev libexpat1-dev libgtk-3-dev ninja-build \
-            clang-19 clang-format-19 clang-tidy-19 \
-            lcov binutils cmake pkg-config dbus python3-dbus python3-gi
-      - name: Configure native tests
-        run: |
-          cmake -S native -B build/native -GNinja \
-            -DBUILD_TESTING=ON \
-            -DPYTHON3_EXECUTABLE=/usr/bin/python3 \
+          cmake -B build native/ -GNinja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_COMPILER=clang++-19 \
             -DCMAKE_C_COMPILER=clang-19 \
-            -DCMAKE_CXX_COMPILER=clang++-19
-      - run: cmake --build build/native --parallel
-      - run: ctest --test-dir build/native --output-on-failure
-      - run: dart test test/build_hook_test.dart test/codec_test.dart test/native_packaging_test.dart
-      - run: CLANG_FORMAT=clang-format-19 scripts/clang_format.sh check
-      - run: CLANG_TIDY=clang-tidy-19 scripts/clang_tidy.sh build/native
-      - run: scripts/coverage.sh
-      - run: scripts/verify_agl_packaging.sh
+            -DPYTHON3_EXECUTABLE=/usr/bin/python3 \
+            -DBUILD_TESTING=ON
+          cmake --build build --parallel
+          ctest --test-dir build --output-on-failure
+      - run: ./scripts/verify_agl_packaging.sh build/libpipewire_telephony_native.so
 
-      - run: scripts/verify_host_package.sh
+  asan:
+    name: ASAN and UBSan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build clang-19 libclang-rt-19-dev pkg-config \
+            libsystemd-dev
+      - run: CC=clang-19 CXX=clang++-19 ./scripts/asan.sh build-asan
+
+  clang-tidy:
+    name: clang-tidy
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build clang-19 clang-tidy-19 pkg-config \
+            libsystemd-dev
+      - name: Build for compile_commands.json
+        run: |
+          cmake -B build native/ -GNinja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_COMPILER=clang++-19 \
+            -DCMAKE_C_COMPILER=clang-19 \
+            -DPWT_BUILD_DART_INTEGRATION_TESTS=OFF \
+            -DBUILD_TESTING=ON
+          cmake --build build --parallel
+      - run: CLANG_TIDY=clang-tidy-19 ./scripts/clang_tidy.sh build
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-24.04
+    needs: [test-cpp]
+    if: github.event_name == 'pull_request' || startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable }
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build gcc g++ pkg-config libsystemd-dev lcov \
+            dbus python3-dbus python3-gi
+      - run: flutter pub get
+      - run: flutter pub get
+        working-directory: example/flutter_telephony
+      - run: PATH="/usr/bin:${PATH}" ./scripts/coverage.sh build-cov
