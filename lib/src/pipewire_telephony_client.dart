@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 Joel Winarske <joel.winarske@gmail.com>
-// SPDX-FileCopyrightText: 2026 Jian De
+// SPDX-FileCopyrightText: 2026 Jian De Seak
 
 // Client lifecycle and event-routing patterns are adapted from
 // https://github.com/jwinarske/bluez_native/blob/main/lib/src/bluez_client.dart

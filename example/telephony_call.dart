@@ -1,8 +1,7 @@
 /*
- * Copyright (c) 2026 Jian De jiande2020@gmail.com. All rights reserved.
+ * Copyright (c) 2026 Jian De Seak jiande2020@gmail.com. All rights reserved.
  *
- * Use of this source code is governed by a BSD-style license that can be
- * found in the LICENSE file.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 // ignore_for_file: avoid_print

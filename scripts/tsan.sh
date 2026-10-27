@@ -1,7 +1,7 @@
 #!/bin/bash
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2026 Joel Winarske <joel.winarske@gmail.com>
-# SPDX-FileCopyrightText: 2026 Jian De
+# SPDX-FileCopyrightText: 2026 Jian De Seak
 
 # ThreadSanitizer variant of scripts/asan.sh, which is patterned after
 # https://github.com/jwinarske/bluez_native/blob/main/scripts/asan.sh.
