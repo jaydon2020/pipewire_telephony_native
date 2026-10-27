@@ -1,14 +1,16 @@
 # PipeWire Telephony Native
 
-Flutter FFI access to PipeWire's Bluetooth HFP telephony D-Bus API on Linux.
-The package discovers audio gateways, calls, and SCO transports and covers the
-PipeWire 1.6.6 method and property surface through typed Dart objects.
+Dart FFI access to PipeWire's Bluetooth HFP telephony D-Bus API for Linux
+Flutter applications and command-line programs run with Flutter's bundled Dart
+SDK. The package discovers audio gateways, calls, and SCO transports and covers
+the [PipeWire 1.6.6 telephony API](https://github.com/PipeWire/pipewire/blob/1.6.6/spa/plugins/bluez5/README-Telephony.md)
+through typed Dart objects.
 
 ## Supported features
 
 | Area | Supported feature | Dart API / notes |
 | --- | --- | --- |
-| Platform | Linux Flutter and standalone Dart | Native Assets supports host builds and explicit CMake-toolchain cross-builds; AGL also has a documented prebuilt path. |
+| Platform | Linux Flutter and command-line Dart using Flutter's bundled SDK | Native Assets supports host builds and explicit CMake-toolchain cross-builds; AGL also has a documented prebuilt path. |
 | D-Bus connection | Automatic, session, or system bus selection | `PipeWireBus.automatic`, `.session`, and `.system` |
 | Gateway discovery | Initial snapshot plus add, remove, and property-change events | `gateways`, `gatewayAdded`, `gatewayRemoved`, `gatewayChanged` |
 | Call discovery | Initial snapshot plus add, remove, and property-change events | `calls`, `callAdded`, `callRemoved`, `callChanged` |
@@ -38,10 +40,27 @@ application-policy responsibilities. Multi-call operations are exposed by the
 API but can still be rejected by the phone when its current call state does not
 permit them.
 
+## Installation
+
+```sh
+flutter pub add pipewire_telephony_native
+```
+
+```dart
+import 'package:pipewire_telephony_native/pipewire_telephony_native.dart';
+```
+
+The package intentionally matches
+[`bluez_native`](https://github.com/jwinarske/bluez_native)'s Dart SDK
+constraint, `^3.10.0`. Because this package is also a Flutter Linux plugin, the
+Flutter SDK must be installed even when running its command-line Dart examples.
+Use Flutter 3.38.1 or newer and its bundled `dart` executable; a standalone Dart
+SDK alone cannot resolve the Flutter SDK dependency.
+
 ## Requirements
 
 - Linux with `org.pipewire.Telephony` available on D-Bus
-- Flutter 3.38.3 / Dart 3.10.1 or newer
+- Flutter 3.38.1 or newer (Dart SDK constraint `^3.10.0`)
 - CMake 3.22, a C++23 compiler, Ninja or Make, and target `libsystemd`
 - `sdbus-c++` submodule contents and the vendored Glaze headers
 
@@ -128,10 +147,11 @@ which could otherwise create a second call.
 
 ## Examples
 
-The standalone Dart examples separate discovery, watching, gateway commands and
-call commands:
+The command-line Dart examples separate discovery, watching, gateway commands
+and call commands. Run them with the Dart executable bundled with Flutter:
 
 ```sh
+flutter pub get
 dart run example/telephony_list.dart
 dart run example/telephony_watch.dart --seconds 30
 dart run example/telephony_gateway.dart /org/pipewire/Telephony/ag1 props
@@ -148,12 +168,11 @@ flutter run -d linux
 ```
 
 All examples use automatic discovery. Pass `--session` or `--system` to a
-standalone example to force one scope. AGL applications should construct the client
-with the bus used by their image, normally `PipeWireBus.system`, so deployment
-and policy failures remain deterministic. Pairing/trust/profile
-connection remains the BlueZ integration's responsibility. Audio routing,
-focus, and microphone/speaker links remain WirePlumber/AGL policy
-responsibilities.
+command-line example to force one scope. AGL applications should construct the
+client with the bus used by their image, normally `PipeWireBus.system`, so
+deployment and policy failures remain deterministic. Pairing, trust, and profile
+connection remain the BlueZ integration's responsibility. Audio routing, focus,
+and microphone/speaker links remain WirePlumber/AGL policy responsibilities.
 
 Automatic discovery only checks buses reachable by the current process. A
 desktop application and its user service normally share the session bus. A
@@ -177,10 +196,15 @@ those deployment results.
 ## Verification
 
 ```sh
+dart test
 flutter analyze
+dart format --output=none --set-exit-if-changed lib hook test example
 cmake -S native -B build/native -DBUILD_TESTING=ON
 cmake --build build/native
 ctest --test-dir build/native --output-on-failure
+./scripts/clang_format.sh check
+./scripts/clang_tidy.sh build/native
+./scripts/verify_agl_packaging.sh
 ./scripts/verify_host_package.sh
 ```
 

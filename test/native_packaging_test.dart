@@ -300,7 +300,7 @@ set(CMAKE_CXX_COMPILER c++)
     await File('${workspace.path}/pubspec.yaml').writeAsString('''
 name: pwt_cross_hook_test
 environment:
-  sdk: '>=3.10.1 <4.0.0'
+  sdk: ^3.10.0
 dependencies:
   pipewire_telephony_native:
     path: $root
@@ -337,7 +337,7 @@ void main() => print(PipeWireBus.system);
     await File('${workspace.path}/pubspec.yaml').writeAsString('''
 name: pwt_skip_hook_test
 environment:
-  sdk: '>=3.10.1 <4.0.0'
+  sdk: ^3.10.0
 dependencies:
   pipewire_telephony_native:
     path: $root

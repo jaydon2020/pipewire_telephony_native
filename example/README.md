@@ -1,10 +1,12 @@
 # pipewire_telephony_native examples
 
-The standalone Dart examples follow the focused, one-interface style used by
-the sibling BlueZ packages. Run them from the package root after building the
-native library:
+The command-line Dart examples follow the focused, one-interface style used by
+the sibling BlueZ packages. They require Flutter 3.38.1 or newer because the
+package has a Flutter SDK dependency. Run them from the package root with
+Flutter's bundled Dart SDK:
 
 ```sh
+flutter pub get
 dart run example/telephony_list.dart
 dart run example/telephony_watch.dart --seconds 30
 ```

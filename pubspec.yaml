@@ -5,8 +5,8 @@ repository: https://github.com/jaydon2020/pipewire_telephony_native
 issue_tracker: https://github.com/jaydon2020/pipewire_telephony_native/issues
 
 environment:
-  sdk: '>=3.10.1 <4.0.0'
-  flutter: '>=3.38.3'
+  sdk: ^3.10.0
+  flutter: '>=3.38.1'
 
 dependencies:
   code_assets: '>=1.0.0 <3.0.0'

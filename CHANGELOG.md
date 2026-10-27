@@ -17,7 +17,10 @@
 * Control calls, multi-call operations, DTMF, HFP volumes, and SCO activation.
 * Expose live property and lifecycle streams, stale-object checks, and D-Bus errors.
 * Support automatic session/system bus discovery and explicit bus selection.
-* Include standalone Dart examples, a Flutter Linux app, and AGL build guidance.
-* Require Flutter 3.38.3 / Dart 3.10.1, CMake 3.22, C++23, and libsystemd.
+* Include command-line Dart examples run with Flutter's bundled SDK, a Flutter
+  Linux app, and AGL build guidance.
+* Match `bluez_native`'s Dart 3.10 SDK baseline. Flutter 3.38.1 or newer is
+  required for dependency resolution.
+* Require CMake 3.22, C++23, and libsystemd.
   Reconnection requires a new client; audio routing and Bluetooth pairing remain
   the application's integration responsibilities.

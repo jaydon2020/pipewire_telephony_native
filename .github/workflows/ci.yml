@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-24.04
     strategy:
       matrix:
-        flutter: [any, '3.38.3']
+        flutter: [any, '3.38.1']
     steps:
       - uses: actions/checkout@v4
         with:
