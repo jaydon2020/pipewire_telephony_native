@@ -34,3 +34,8 @@ Testing/
 *.dylib
 *.dll
 coverage*.info
+
+# Native unit-test implementation is not needed by consumer builds.
+/native/test/
+/native/third_party/googletest/CMakeLists.txt
+/native/third_party/googletest/googletest/

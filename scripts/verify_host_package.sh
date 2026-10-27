@@ -54,7 +54,16 @@ mkdir -p "${TEMP_DIR}/archive"
 # Listed directories must not recursively reintroduce excluded files.
 tar --no-recursion --verbatim-files-from -T "${TEMP_DIR}/files" -cf - | \
   tar -xf - -C "${TEMP_DIR}/archive"
-for excluded in task.md ARCHITECTURE.md .git .dart_tool build coverage; do
+for excluded in \
+  task.md \
+  ARCHITECTURE.md \
+  .git \
+  .dart_tool \
+  build \
+  coverage \
+  native/test \
+  native/third_party/googletest/CMakeLists.txt \
+  native/third_party/googletest/googletest; do
   if [[ -e "${TEMP_DIR}/archive/${excluded}" ]]; then
     echo "Excluded local path was packaged: ${excluded}" >&2
     exit 1
