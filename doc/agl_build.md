@@ -43,28 +43,10 @@ validation never executes a target binary.
 
 ## Native Assets cross-build
 
-An application can ask the package hook to compile directly for its Linux
-target by adding the toolchain path to the application or workspace pubspec:
-
-```yaml
-hooks:
-  user_defines:
-    pipewire_telephony_native:
-      cmake_toolchain_file: /absolute/path/to/agl-toolchain.cmake
-```
-
-Relative paths are resolved from that pubspec. The file must be a CMake
-toolchain that sets `CMAKE_SYSTEM_NAME`, `CMAKE_SYSTEM_PROCESSOR`, a target
-compiler and `CMAKE_SYSROOT`, and makes target `libsystemd` discoverable by
-pkg-config. Native Assets hooks run in a semi-hermetic environment, so AGL/Yocto
-variables such as `SDKTARGETSYSROOT` and `PKG_CONFIG_SYSROOT_DIR` are not passed
-through automatically. Use a self-contained wrapper toolchain that sets the
-required paths (including pkg-config environment values) before including the
-SDK's `OEToolchainConfig.cmake`.
-
-The hook registers the toolchain as a build dependency, requires CMake to
-report a cross-build with a sysroot, and checks that the final ELF matches the
-Native Assets target architecture. This path never executes a target binary.
+The package hook uses the compiler and sysroot environment supplied by the
+AGL/Yocto recipe, as `bluez_native` does. Ensure that CMake sees the target
+compiler and target `libsystemd` through pkg-config. The native CMake build
+validates its output library and does not execute a target binary.
 
 The standalone `scripts/build_agl.sh` and validated prebuilt integration remain
 available when the application build cannot provide a self-contained toolchain.

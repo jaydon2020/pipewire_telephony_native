@@ -14,7 +14,6 @@
 // https://github.com/jaydon2020/bluez_obex_native/blob/main/hook/build.dart.
 
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:code_assets/code_assets.dart';
 import 'package:hooks/hooks.dart';
@@ -34,24 +33,6 @@ void main(List<String> args) async {
         Platform.environment.containsKey('SKIP_NATIVE_BUILD')) {
       stderr.writeln('Native build disabled — skipping CMake.');
       return;
-    }
-
-    final codeConfig = input.config.code;
-    final toolchainUri = input.userDefines.path('cmake_toolchain_file');
-    validateBuildTarget(
-      OS.current,
-      codeConfig.targetOS,
-      Architecture.current,
-      codeConfig.targetArchitecture,
-      hasToolchain: toolchainUri != null,
-    );
-
-    if (toolchainUri != null) {
-      final toolchain = File.fromUri(toolchainUri);
-      if (!toolchain.existsSync()) {
-        throw StateError('CMake toolchain file not found: ${toolchain.path}');
-      }
-      output.dependencies.add(toolchain.uri);
     }
 
     final packageRoot = input.packageRoot.toFilePath();
@@ -79,17 +60,16 @@ void main(List<String> args) async {
       ]);
     }
 
-    await _run(
-      'cmake',
-      cmakeConfigureArguments(
-        nativeRoot: nativeRoot,
-        buildDirectory: buildDir,
-        hostArchitecture: Architecture.current,
-        targetArchitecture: codeConfig.targetArchitecture,
-        toolchainUri: toolchainUri,
-        hasNinja: await _which('ninja'),
-      ),
-    );
+    if (!File('${buildDir}CMakeCache.txt').existsSync()) {
+      await _run(
+        'cmake',
+        cmakeConfigureArguments(
+          nativeRoot: nativeRoot,
+          buildDirectory: buildDir,
+          hasNinja: await _which('ninja'),
+        ),
+      );
+    }
 
     await _run('cmake', ['--build', buildDir, '--parallel']);
 
@@ -99,13 +79,6 @@ void main(List<String> args) async {
         'libpipewire_telephony_native.so not found at ${library.path}',
       );
     }
-    final file = await library.open();
-    try {
-      validateElfHeader(await file.read(64), codeConfig.targetArchitecture);
-    } finally {
-      await file.close();
-    }
-
     output.assets.code.add(
       CodeAsset(
         package: input.packageName,
@@ -121,38 +94,6 @@ void main(List<String> args) async {
 
     stderr.writeln('libpipewire_telephony_native built: ${library.path}');
   });
-}
-
-void validateElfHeader(Uint8List header, Architecture architecture) {
-  final (elfClass, machine) = switch (architecture) {
-    Architecture.arm => (1, 40),
-    Architecture.arm64 => (2, 183),
-    Architecture.ia32 => (1, 3),
-    Architecture.x64 => (2, 62),
-    Architecture.riscv32 => (1, 243),
-    Architecture.riscv64 => (2, 243),
-    _ => throw UnsupportedError(
-      'Unsupported Linux architecture: $architecture',
-    ),
-  };
-  if (header.length < 52 ||
-      header[0] != 0x7f ||
-      header[1] != 0x45 ||
-      header[2] != 0x4c ||
-      header[3] != 0x46 ||
-      header[4] != elfClass ||
-      header[5] != 1 ||
-      header[6] != 1 ||
-      (elfClass == 2 && header.length < 64)) {
-    throw StateError(
-      'Native library is not a valid little-endian $architecture ELF',
-    );
-  }
-  final data = ByteData.sublistView(header);
-  if (data.getUint16(16, Endian.little) != 3 ||
-      data.getUint16(18, Endian.little) != machine) {
-    throw StateError('Native library does not match Linux $architecture');
-  }
 }
 
 Future<void> _run(String executable, List<String> arguments) async {
@@ -177,33 +118,9 @@ Future<bool> _which(String executable) async {
   return result.exitCode == 0;
 }
 
-void validateBuildTarget(
-  OS hostOS,
-  OS targetOS,
-  Architecture hostArchitecture,
-  Architecture targetArchitecture, {
-  required bool hasToolchain,
-}) {
-  if (hostOS != OS.linux || targetOS != OS.linux) {
-    throw UnsupportedError(
-      'pipewire_telephony_native requires a Linux host and target.',
-    );
-  }
-  if (hostArchitecture != targetArchitecture && !hasToolchain) {
-    throw UnsupportedError(
-      'Cross-compiling pipewire_telephony_native from $hostArchitecture to '
-      '$targetArchitecture requires '
-      'hooks.user_defines.pipewire_telephony_native.cmake_toolchain_file.',
-    );
-  }
-}
-
 List<String> cmakeConfigureArguments({
   required String nativeRoot,
   required String buildDirectory,
-  required Architecture hostArchitecture,
-  required Architecture targetArchitecture,
-  required Uri? toolchainUri,
   required bool hasNinja,
 }) => [
   '-S',
@@ -214,9 +131,6 @@ List<String> cmakeConfigureArguments({
   '-DBUILD_TESTING=OFF',
   '-DPWT_BUILD_DART_INTEGRATION_TESTS=OFF',
   '-DPWT_HOOK_BUILD=ON',
-  if (toolchainUri != null)
-    '-DCMAKE_TOOLCHAIN_FILE=${File.fromUri(toolchainUri).path}',
-  if (hostArchitecture != targetArchitecture) '-DPWT_REQUIRE_CROSS_COMPILE=ON',
   if (hasNinja) ...['-G', 'Ninja'],
 ];
 

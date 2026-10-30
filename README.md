@@ -94,9 +94,9 @@ The existing Flutter Linux CMake path remains supported for those deployments.
 preserve it, but standard Native Assets hooks strip undeclared environment
 variables; prefer the user define above.
 
-The hook supports a Linux target matching the host architecture. It also accepts
-an explicit `cmake_toolchain_file` user define for AGL cross-builds; see the
-target toolchain and prebuilt instructions below. Every native CMake build
+For AGL cross-builds, the hook uses the compiler environment provided by the
+build recipe, like `bluez_native`; see the target toolchain and prebuilt
+instructions below. Every native CMake build
 checks the output ELF machine/class and public ABI using
 `readelf` and `nm` (binutils); a foreign architecture cannot be supplied by a
 host compiler.
