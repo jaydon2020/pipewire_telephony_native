@@ -1,3 +1,8 @@
+## 0.1.1
+
+* Build native assets with the compiler environment supplied by the host build,
+  matching `bluez_native`; a CMake toolchain user define is no longer required.
+
 ## 0.1.0
 
 * Initial Linux release with Flutter FFI and Dart Native Assets builds.
